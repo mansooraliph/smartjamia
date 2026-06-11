@@ -1,7 +1,9 @@
 # EduPro — Deployment Guide
 
-Production deployment for the EduPro SaaS (NestJS API + React SPA + PostgreSQL ×2 + Redis).
-This guide assumes a single Linux server (Ubuntu/Debian) with **Node 20**, **Docker + Docker Compose**, **nginx**, and **git** already installed.
+Production deployment for the EduPro SaaS (NestJS API + React SPA + PostgreSQL + Redis).
+This guide assumes a single Linux server (Ubuntu/Debian) with **Node 20**, **PostgreSQL 16**, **Redis 7**, **nginx**, and **git** already installed — **no Docker**. (The repo's `docker-compose.yml` is for local development only.)
+
+EduPro uses two logical databases — **`edupro_master`** (schools/plans/subscriptions) and **`edupro_data`** (tenant schemas). On a native server these are simply **two databases inside one PostgreSQL instance** (default port **5432**), not two servers.
 
 Two committed files do most of the work:
 
@@ -18,12 +20,13 @@ Throughout, the repo is assumed at `/var/www/edupro` and the public domain is `a
 |-----------|------|-------|
 | API (NestJS) | **3002** (localhost) | global prefix `/api/v1`, Swagger `/api/docs`, static `/uploads` |
 | SPA (React build) | — | static files in `frontend/dist`, served by nginx |
-| PostgreSQL master | **5437** (localhost) | schools, plans, subscriptions, invoices, superadmins |
-| PostgreSQL data | **5438** (localhost) | tenant schemas (`shared_pool` + `school_<slug>`) |
-| Redis | **6381** (localhost) | BullMQ queues (PDF generation jobs) |
+| PostgreSQL | **5432** (localhost) | one instance, two databases: `edupro_master` + `edupro_data` (tenant schemas `shared_pool` + `school_<slug>`) |
+| Redis | **6379** (localhost) | BullMQ queues (PDF generation jobs) |
 | nginx | **80 / 443** (public) | serves SPA, proxies `/api/` + `/uploads/` to 3002 |
 
 Only **80/443** are exposed publicly. Everything else stays on `localhost`.
+
+> The docker-compose dev setup uses non-standard ports (5437/5438/6381) to avoid local conflicts. On a native server, use the **standard 5432 / 6379** as shown here and set the `.env` ports to match.
 
 ---
 
@@ -61,10 +64,10 @@ JWT_SECRET=...
 JWT_REFRESH_SECRET=...
 PIN_JWT_SECRET=...
 
-# DB / Redis — localhost is correct on a single box; ports match docker-compose
-MASTER_DB_HOST=localhost   MASTER_DB_PORT=5437   MASTER_DB_PASS=<change-me>
-DATA_DB_HOST=localhost     DATA_DB_PORT=5438     DATA_DB_PASS=<change-me>
-REDIS_HOST=localhost       REDIS_PORT=6381
+# DB / Redis — native PostgreSQL (one instance, two DBs) + native Redis
+MASTER_DB_HOST=localhost  MASTER_DB_PORT=5432  MASTER_DB_NAME=edupro_master  MASTER_DB_USER=edupro_user  MASTER_DB_PASS=<change-me>
+DATA_DB_HOST=localhost    DATA_DB_PORT=5432    DATA_DB_NAME=edupro_data      DATA_DB_USER=edupro_user    DATA_DB_PASS=<change-me>
+REDIS_HOST=localhost      REDIS_PORT=6379
 
 # Uploads — ABSOLUTE path, on persistent disk (holds report-card / TC PDFs + photos)
 STORAGE_LOCAL_PATH=/var/www/edupro/uploads
@@ -82,25 +85,53 @@ RAZORPAY_WEBHOOK_SECRET=...
 # PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome
 ```
 
-> Use the **same** DB passwords here and in `docker-compose.yml` (or edit the compose file to match). `APP_PORT` is optional — the API defaults to **3002**.
+> `APP_PORT` is optional — the API defaults to **3002**. The `MASTER_DB_PASS` / `DATA_DB_PASS` must match the password you set for the `edupro_user` role in step 3.
 
 ```bash
 mkdir -p /var/www/edupro/uploads
 ```
 
-## 3. Database — start, create schema, seed
+## 3. Database — PostgreSQL + Redis (native)
+
+### 3a. Install (if not already present)
 
 ```bash
-npm run db:up                 # postgres-master:5437, postgres-data:5438, redis:6381
-docker compose ps             # wait until all 3 report "healthy"
+sudo apt update
+sudo apt install -y postgresql postgresql-contrib redis-server
+sudo systemctl enable --now postgresql redis-server
+```
 
-npm run db:setup              # creates the databases + shared_pool schema + all tables
+### 3b. Create the role + the two databases + extensions
+
+`db:setup` connects **as `edupro_user`** and materializes the tables, but it does **not** create the role, the databases, or the (superuser-only) extensions. Do that once as the `postgres` superuser:
+
+```bash
+sudo -u postgres psql <<'SQL'
+CREATE ROLE edupro_user LOGIN PASSWORD 'CHANGE_ME_STRONG';
+CREATE DATABASE edupro_master OWNER edupro_user;
+CREATE DATABASE edupro_data   OWNER edupro_user;
+SQL
+
+# uuid-ossp + pgcrypto are superuser-only — install them in BOTH databases now
+# so the app's `CREATE EXTENSION IF NOT EXISTS` calls are harmless no-ops.
+for db in edupro_master edupro_data; do
+  sudo -u postgres psql -d "$db" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
+  sudo -u postgres psql -d "$db" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";'
+done
+```
+
+Use the **same password** (`CHANGE_ME_STRONG`) for `MASTER_DB_PASS` / `DATA_DB_PASS` in `.env`.
+
+> PostgreSQL listens on `localhost:5432` by default — no `postgresql.conf` / `pg_hba.conf` changes needed for a same-box app. Redis listens on `localhost:6379` by default. If your Redis requires a password, set `REDIS_PASSWORD` in `.env`.
+
+### 3c. Create the schema + seed
+
+```bash
+npm run db:setup              # creates the shared_pool schema + all tables on both DBs
 npm run seed                  # seeds the 4 plans + the superadmin account
 ```
 
-> **No migration system.** `db:setup` materializes the schema from the TypeORM entities (run once on first deploy). It needs `ts-node` — hence the full `npm install` in step 1.
->
-> **Managed/external Postgres instead of Docker?** Skip `db:up`, point `MASTER_DB_*` / `DATA_DB_*` at your instance, provide a Redis, then still run `db:setup` + `seed`.
+> **No migration system.** `db:setup` materializes the schema from the TypeORM entities (run once on first deploy; safe to re-run). It needs `ts-node` — hence the full `npm install` in step 1.
 
 ## 4. Build
 
@@ -183,8 +214,8 @@ If a release adds **new tables/columns**, re-run `npm run db:setup` (synchronize
 - **Logs:** `pm2 logs edupro-api`, `pm2 monit`.
 - **Backups:** schedule `pg_dump` for both DBs and back up `uploads/`:
   ```bash
-  PGPASSWORD=$MASTER_DB_PASS pg_dump -h localhost -p 5437 -U edupro_user edupro_master > master.sql
-  PGPASSWORD=$DATA_DB_PASS   pg_dump -h localhost -p 5438 -U edupro_user edupro_data   > data.sql
+  PGPASSWORD=$MASTER_DB_PASS pg_dump -h localhost -p 5432 -U edupro_user edupro_master > master.sql
+  PGPASSWORD=$DATA_DB_PASS   pg_dump -h localhost -p 5432 -U edupro_user edupro_data   > data.sql
   tar czf uploads.tgz /var/www/edupro/uploads
   ```
   (Generated PDFs are **not** auto-regenerated — back up `uploads/`.)
