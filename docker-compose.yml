@@ -1,0 +1,55 @@
+services:
+  postgres-master:
+    image: postgres:16-alpine
+    container_name: edupro_master
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: edupro_master
+      POSTGRES_USER: edupro_user
+      POSTGRES_PASSWORD: edupro_master_pass
+    ports:
+      - "5437:5432"
+    volumes:
+      - edupro_master_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edupro_user -d edupro_master"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres-data:
+    image: postgres:16-alpine
+    container_name: edupro_data
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: edupro_data
+      POSTGRES_USER: edupro_user
+      POSTGRES_PASSWORD: edupro_data_pass
+    ports:
+      - "5438:5432"
+    volumes:
+      - edupro_data_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edupro_user -d edupro_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: edupro_redis
+    restart: unless-stopped
+    ports:
+      - "6381:6379"
+    volumes:
+      - edupro_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  edupro_master_data:
+  edupro_data_data:
+  edupro_redis_data:
