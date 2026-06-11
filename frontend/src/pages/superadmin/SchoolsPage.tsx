@@ -594,8 +594,8 @@ function OwnerModal({
   const hydrated = useRef(false);
   useEffect(() => {
     if (owner && !hydrated.current) {
-      setName(owner.name);
-      setEmail(owner.email);
+      setName(owner.name ?? '');
+      setEmail(owner.email ?? '');
       hydrated.current = true;
     }
   }, [owner]);
@@ -622,8 +622,8 @@ function OwnerModal({
     <Modal
       open
       onClose={onClose}
-      title={`School admin — ${school.name}`}
-      description={`Login code: ${school.code}`}
+      title={`School admin — ${school.name ?? ''}`}
+      description={`Login code: ${school.code ?? '—'}`}
       size="md"
       footer={
         <>
