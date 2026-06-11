@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { IsNull } from 'typeorm';
 import { ClassEntity } from '../../../database/tenant/class.entity';
 import { Section } from '../../../database/tenant/section.entity';
 import { AcademicYear } from '../../../database/tenant/academic-year.entity';
@@ -15,10 +16,19 @@ export class ClassesService {
   constructor(private readonly tenant: TenantSchemaService) {}
 
   // ─── Classes ──────────────────────────────────────────────────────────────
-  list(schemaName: string, schoolId: string, academicYearId?: string) {
+  list(
+    schemaName: string,
+    schoolId: string,
+    academicYearId?: string,
+    courseId?: string,
+  ) {
     return this.tenant.runInSchema(schemaName, async (em) => {
       return em.getRepository(ClassEntity).find({
-        where: { schoolId, ...(academicYearId ? { academicYearId } : {}) },
+        where: {
+          schoolId,
+          ...(academicYearId ? { academicYearId } : {}),
+          ...(courseId ? { courseId } : {}),
+        },
         order: { orderIndex: 'ASC', name: 'ASC' },
       });
     });
@@ -53,10 +63,15 @@ export class ClassesService {
     schemaName: string,
     schoolId: string,
     academicYearId?: string,
+    courseId?: string,
   ) {
     return this.tenant.runInSchema(schemaName, async (em) => {
       const classes = await em.getRepository(ClassEntity).find({
-        where: { schoolId, ...(academicYearId ? { academicYearId } : {}) },
+        where: {
+          schoolId,
+          ...(academicYearId ? { academicYearId } : {}),
+          ...(courseId ? { courseId } : {}),
+        },
         order: { orderIndex: 'ASC', name: 'ASC' },
       });
       if (classes.length === 0) return [];
@@ -95,22 +110,27 @@ export class ClassesService {
         .findOne({ where: { id: dto.academicYearId, schoolId } });
       if (!ay) throw new NotFoundException('Academic year not found');
 
+      // Class names are unique within a (year, course) — colleges reuse names
+      // like "Semester 1" across courses, so the course scopes the check.
       const dup = await em.getRepository(ClassEntity).findOne({
         where: {
           schoolId,
           academicYearId: dto.academicYearId,
           name: dto.name,
+          courseId: dto.courseId ?? IsNull(),
         },
       });
       if (dup) {
         throw new ConflictException(
-          'A class with this name already exists in this academic year',
+          'A class with this name already exists in this academic year' +
+            (dto.courseId ? ' / course' : ''),
         );
       }
       return em.getRepository(ClassEntity).save(
         em.getRepository(ClassEntity).create({
           schoolId,
           academicYearId: dto.academicYearId,
+          courseId: dto.courseId ?? null,
           name: dto.name,
           orderIndex: dto.orderIndex ?? 0,
         }),

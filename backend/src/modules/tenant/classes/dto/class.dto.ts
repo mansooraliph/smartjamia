@@ -13,6 +13,11 @@ export class CreateClassDto {
   @IsUUID()
   academicYearId: string;
 
+  @ApiPropertyOptional({ description: 'Parent course/program (college mode)' })
+  @IsOptional()
+  @IsUUID()
+  courseId?: string | null;
+
   @ApiProperty({ example: 'Class 10' })
   @IsString()
   @Length(1, 50)

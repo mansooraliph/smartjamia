@@ -20,6 +20,10 @@ export class ClassEntity {
   @Column({ type: 'uuid', name: 'academic_year_id' })
   academicYearId: string;
 
+  /** Parent course/program (college mode). NULL for schools. */
+  @Column({ type: 'uuid', name: 'course_id', nullable: true })
+  courseId: string | null;
+
   @Column({ type: 'varchar', length: 50 })
   name: string;
 

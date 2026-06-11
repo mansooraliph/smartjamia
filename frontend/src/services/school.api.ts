@@ -17,11 +17,33 @@ export interface ClassEntity {
   id: string;
   schoolId: string;
   academicYearId: string;
+  courseId?: string | null;
   name: string;
   orderIndex: number;
   createdAt: string;
   updatedAt: string;
   sections?: Section[];
+}
+
+export type CourseLevel =
+  | 'ug'
+  | 'pg'
+  | 'diploma'
+  | 'phd'
+  | 'certificate'
+  | 'other';
+
+export interface Course {
+  id: string;
+  schoolId: string;
+  academicYearId: string;
+  level: CourseLevel;
+  name: string;
+  code: string | null;
+  orderIndex: number;
+  classCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Section {
@@ -174,6 +196,7 @@ export interface Terminology {
   levelPlural: string;
   group: string;
   groupPlural: string;
+  institutionType: 'school' | 'college';
 }
 
 export const DEFAULT_TERMINOLOGY: Terminology = {
@@ -181,6 +204,7 @@ export const DEFAULT_TERMINOLOGY: Terminology = {
   levelPlural: 'Classes',
   group: 'Section',
   groupPlural: 'Sections',
+  institutionType: 'school',
 };
 
 export type RoleAccessMap = Record<string, string[]>;
@@ -511,12 +535,16 @@ export const ClassesApi = {
         params: academicYearId ? { academicYearId } : undefined,
       }),
     ),
-  listWithSections: async (academicYearId?: string): Promise<ClassEntity[]> =>
+  listWithSections: async (
+    academicYearId?: string,
+    courseId?: string,
+  ): Promise<ClassEntity[]> =>
     unwrap(
       await api.get('/school/classes', {
         params: {
           withSections: 'true',
           ...(academicYearId ? { academicYearId } : {}),
+          ...(courseId ? { courseId } : {}),
         },
       }),
     ),
@@ -533,6 +561,33 @@ export const ClassesApi = {
     downloadExport('/school/classes/export', 'classes', format, {
       ...(academicYearId ? { academicYearId } : {}),
     }),
+};
+
+export const CoursesApi = {
+  list: async (academicYearId?: string): Promise<Course[]> =>
+    unwrap(
+      await api.get('/school/courses', {
+        params: academicYearId ? { academicYearId } : undefined,
+      }),
+    ),
+  create: async (data: {
+    academicYearId: string;
+    level: CourseLevel;
+    name: string;
+    code?: string;
+    orderIndex?: number;
+  }): Promise<Course> => unwrap(await api.post('/school/courses', data)),
+  update: async (
+    id: string,
+    data: Partial<{
+      level: CourseLevel;
+      name: string;
+      code: string;
+      orderIndex: number;
+    }>,
+  ): Promise<Course> => unwrap(await api.patch(`/school/courses/${id}`, data)),
+  remove: async (id: string) =>
+    unwrap(await api.delete(`/school/courses/${id}`)),
 };
 
 export const SectionsApi = {

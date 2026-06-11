@@ -50,16 +50,23 @@ export class ClassesController {
   @Get()
   @Roles(...ALL_ROLES)
   @ApiQuery({ name: 'academicYearId', required: false })
+  @ApiQuery({ name: 'courseId', required: false })
   @ApiQuery({ name: 'withSections', required: false, type: Boolean })
   @ApiOperation({ summary: 'List classes (optionally with sections)' })
   list(
     @Tenant() t: TenantContext,
     @Query('academicYearId') academicYearId?: string,
     @Query('withSections') withSections?: string,
+    @Query('courseId') courseId?: string,
   ) {
     return withSections === 'true'
-      ? this.svc.listWithSections(t.schemaName, t.schoolId, academicYearId)
-      : this.svc.list(t.schemaName, t.schoolId, academicYearId);
+      ? this.svc.listWithSections(
+          t.schemaName,
+          t.schoolId,
+          academicYearId,
+          courseId,
+        )
+      : this.svc.list(t.schemaName, t.schoolId, academicYearId, courseId);
   }
 
   @Get('export')

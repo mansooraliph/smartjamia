@@ -11,6 +11,7 @@ import { User } from './tenant/user.entity';
 import { Role } from './tenant/role.entity';
 import { SchoolProfile } from './tenant/school-profile.entity';
 import { AcademicYear } from './tenant/academic-year.entity';
+import { Course } from './tenant/course.entity';
 import { ClassEntity } from './tenant/class.entity';
 import { Section } from './tenant/section.entity';
 import { Subject } from './tenant/subject.entity';
@@ -49,6 +50,7 @@ export const TENANT_ENTITIES = [
   Role,
   SchoolProfile,
   AcademicYear,
+  Course,
   ClassEntity,
   Section,
   Subject,

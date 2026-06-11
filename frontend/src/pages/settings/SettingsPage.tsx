@@ -80,7 +80,7 @@ function TabBtn({
 }
 
 // ───── General (terminology) ────────────────────────────────────────────────
-const PRESETS: { label: string; value: Terminology }[] = [
+const PRESETS: { label: string; value: Omit<Terminology, 'institutionType'> }[] = [
   { label: 'School (K-12)', value: { level: 'Class', levelPlural: 'Classes', group: 'Section', groupPlural: 'Sections' } },
   { label: 'College (semesters)', value: { level: 'Semester', levelPlural: 'Semesters', group: 'Batch', groupPlural: 'Batches' } },
   { label: 'College (years)', value: { level: 'Year', levelPlural: 'Years', group: 'Section', groupPlural: 'Sections' } },
@@ -90,7 +90,7 @@ const PRESETS: { label: string; value: Terminology }[] = [
 function GeneralTab() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['terminology'], queryFn: SettingsApi.getTerminology });
-  const [form, setForm] = useState<Terminology>({ level: '', levelPlural: '', group: '', groupPlural: '' });
+  const [form, setForm] = useState<Terminology>({ level: '', levelPlural: '', group: '', groupPlural: '', institutionType: 'school' });
   useEffect(() => { if (data) setForm(data); }, [data]);
 
   const save = useMutation({
@@ -103,7 +103,52 @@ function GeneralTab() {
   const set = (k: keyof Terminology, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   return (
-    <div className="max-w-2xl rounded-lg border border-slate-200 bg-white p-5">
+    <div className="max-w-2xl space-y-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="mb-1 text-sm font-semibold text-slate-900">
+          Institution type
+        </div>
+        <p className="mb-4 text-sm text-slate-500">
+          Colleges get an extra <b>Course / Program</b> layer above classes
+          (grouped by UG/PG). Schools stay flat — classes directly under the
+          academic year.
+        </p>
+        <div className="flex gap-2">
+          {(['school', 'college'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => set('institutionType', t)}
+              className={
+                'flex-1 rounded-lg border px-4 py-3 text-left transition ' +
+                (form.institutionType === t
+                  ? 'border-brand-400 bg-brand-50/50 ring-1 ring-brand-200'
+                  : 'border-slate-200 hover:bg-slate-50')
+              }
+            >
+              <div className="font-medium capitalize text-slate-900">{t}</div>
+              <div className="text-xs text-slate-500">
+                {t === 'school'
+                  ? 'Class → Section'
+                  : 'Course (UG/PG) → Class → Section'}
+              </div>
+            </button>
+          ))}
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <button className="btn-primary" onClick={() => save.mutate()} disabled={save.isPending}>
+            <Save className="mr-1.5 h-4 w-4" />
+            {save.isPending ? 'Saving…' : 'Save'}
+          </button>
+          {save.isSuccess && (
+            <span className="inline-flex items-center gap-1 text-sm text-green-600">
+              <Check className="h-4 w-4" /> Saved
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-white p-5">
       <div className="mb-1 text-sm font-semibold text-slate-900">Academic terminology</div>
       <p className="mb-4 text-sm text-slate-500">
         Tailor labels — schools use “Class / Section”, colleges may prefer
@@ -111,7 +156,7 @@ function GeneralTab() {
       </p>
       <div className="mb-4 flex flex-wrap gap-2">
         {PRESETS.map((p) => (
-          <button key={p.label} type="button" className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setForm(p.value)}>
+          <button key={p.label} type="button" className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50" onClick={() => setForm((f) => ({ ...p.value, institutionType: f.institutionType }))}>
             {p.label}
           </button>
         ))}
@@ -140,6 +185,7 @@ function GeneralTab() {
             <Check className="h-4 w-4" /> Saved
           </span>
         )}
+      </div>
       </div>
     </div>
   );

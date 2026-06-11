@@ -57,6 +57,7 @@ export class SettingsService {
         levelPlural: dto.levelPlural?.trim() || current.levelPlural,
         group: dto.group?.trim() || current.group,
         groupPlural: dto.groupPlural?.trim() || current.groupPlural,
+        institutionType: dto.institutionType ?? current.institutionType,
       };
       profile.settings = { ...(profile.settings ?? {}), terminology: next };
       await repo.save(profile);
@@ -113,6 +114,8 @@ export class SettingsService {
       levelPlural: t.levelPlural || DEFAULT_TERMINOLOGY.levelPlural,
       group: t.group || DEFAULT_TERMINOLOGY.group,
       groupPlural: t.groupPlural || DEFAULT_TERMINOLOGY.groupPlural,
+      institutionType:
+        t.institutionType === 'college' ? 'college' : 'school',
     };
   }
 }

@@ -14,6 +14,9 @@ import { SubjectsController } from './subjects/subjects.controller';
 import { SubjectsService } from './subjects/subjects.service';
 import { SubjectImportService } from './subjects/subject-import.service';
 
+import { CoursesController } from './courses/courses.controller';
+import { CoursesService } from './courses/courses.service';
+
 import { StudentsController } from './students/students.controller';
 import { StudentsService } from './students/students.service';
 import { StudentImportService } from './students/student-import.service';
@@ -72,6 +75,7 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
   controllers: [
     AcademicYearsController,
     ClassesController,
+    CoursesController,
     SectionsController,
     SubjectsController,
     StudentsController,
@@ -93,6 +97,7 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
   providers: [
     AcademicYearsService,
     ClassesService,
+    CoursesService,
     SubjectsService,
     SubjectImportService,
     StudentsService,
