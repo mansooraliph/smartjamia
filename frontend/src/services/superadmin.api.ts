@@ -146,6 +146,15 @@ export const SchoolsApi = {
     totalRowsMoved: number;
     movedRows: Record<string, number>;
   }> => unwrap(await api.post(`/superadmin/schools/${id}/provision`)),
+  getOwner: async (
+    id: string,
+  ): Promise<{ id: string; name: string; email: string; isActive: boolean } | null> =>
+    unwrap(await api.get(`/superadmin/schools/${id}/owner`)),
+  setOwner: async (
+    id: string,
+    data: { name?: string; email?: string; password?: string },
+  ): Promise<{ id: string; name: string; email: string; created: boolean }> =>
+    unwrap(await api.put(`/superadmin/schools/${id}/owner`, data)),
 };
 
 // ───── Platform maintenance ─────────────────────────────────────────────────

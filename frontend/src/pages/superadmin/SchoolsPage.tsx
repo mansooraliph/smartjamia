@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -12,6 +12,8 @@ import {
   Database,
   Server,
   RefreshCw,
+  UserCog,
+  Loader2,
 } from 'lucide-react';
 import {
   CreateSchoolPayload,
@@ -106,6 +108,7 @@ export function SchoolsPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [provisionTarget, setProvisionTarget] = useState<School | null>(null);
+  const [ownerTarget, setOwnerTarget] = useState<School | null>(null);
 
   const { data: schools = [], isLoading } = useQuery({
     queryKey: ['schools'],
@@ -286,6 +289,13 @@ export function SchoolsPage() {
             >
               <Pencil className="h-4 w-4" />
             </button>
+            <button
+              className="rounded-md p-1.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+              onClick={() => setOwnerTarget(s)}
+              title="Manage admin / reset password"
+            >
+              <UserCog className="h-4 w-4" />
+            </button>
             {!s.isSchemaProvisioned && (
               <button
                 className="rounded-md p-1.5 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50"
@@ -346,6 +356,17 @@ export function SchoolsPage() {
         message={`Soft-delete "${confirm.school?.name}". Data is retained but the school will be hidden from listings.`}
         confirmText="Delete school"
       />
+
+      {ownerTarget && (
+        <OwnerModal
+          school={ownerTarget}
+          onClose={() => setOwnerTarget(null)}
+          onSaved={(msg) => {
+            setOwnerTarget(null);
+            setNotice(msg);
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={!!provisionTarget}
@@ -549,6 +570,120 @@ function SchoolFormModal({
           </div>
         )}
       </form>
+    </Modal>
+  );
+}
+
+function OwnerModal({
+  school,
+  onClose,
+  onSaved,
+}: {
+  school: School;
+  onClose: () => void;
+  onSaved: (msg: string) => void;
+}) {
+  const { data: owner, isLoading } = useQuery({
+    queryKey: ['school-owner', school.id],
+    queryFn: () => SchoolsApi.getOwner(school.id),
+  });
+
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const hydrated = useRef(false);
+  useEffect(() => {
+    if (owner && !hydrated.current) {
+      setName(owner.name);
+      setEmail(owner.email);
+      hydrated.current = true;
+    }
+  }, [owner]);
+
+  const exists = !!owner;
+  const save = useMutation({
+    mutationFn: () =>
+      SchoolsApi.setOwner(school.id, {
+        name: name.trim() || undefined,
+        email: email.trim() || undefined,
+        password: password || undefined,
+      }),
+    onSuccess: (r) =>
+      onSaved(
+        `${r.created ? 'Created' : 'Updated'} admin for ${school.name} — ${r.email}${password ? ' · password reset' : ''}.`,
+      ),
+  });
+
+  const valid = exists
+    ? Boolean(name.trim() || email.trim() || password)
+    : Boolean(name.trim() && email.trim() && password.length >= 8);
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`School admin — ${school.name}`}
+      description={`Login code: ${school.code}`}
+      size="md"
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-primary inline-flex items-center gap-1.5"
+            onClick={() => save.mutate()}
+            disabled={save.isPending || !valid}
+          >
+            {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+            {exists ? 'Save changes' : 'Create admin'}
+          </button>
+        </>
+      }
+    >
+      {isLoading ? (
+        <div className="py-6 text-center text-slate-400">Loading…</div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500">
+            {exists
+              ? 'Change the admin’s name/email, or set a new password. Leave the password blank to keep the current one.'
+              : 'No admin exists for this school yet. Create one — they log in with the School Code above + this email and password.'}
+          </p>
+          <Field label="Admin name">
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Principal Name"
+            />
+          </Field>
+          <Field label="Login email">
+            <Input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="owner@school.edu"
+            />
+          </Field>
+          <Field
+            label={exists ? 'New password (optional)' : 'Password'}
+            hint="At least 8 characters"
+          >
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder={exists ? 'Leave blank to keep current' : 'Min 8 chars'}
+            />
+          </Field>
+          {save.error && (
+            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errMsg(save.error)}
+            </div>
+          )}
+        </div>
+      )}
     </Modal>
   );
 }

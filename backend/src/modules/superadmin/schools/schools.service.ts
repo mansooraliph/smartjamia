@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -140,6 +141,99 @@ export class SchoolsService {
     const school = await this.findOne(id);
     await this.repo.softRemove(school);
     return { deleted: true, id };
+  }
+
+  /** The school's current admin/owner (or null), read from its tenant schema. */
+  async getOwner(id: string) {
+    const school = await this.findOne(id);
+    return this.tenantSchema.runInSchema(school.schemaName, async (em) => {
+      const owner = await em.getRepository(User).findOne({
+        where: { schoolId: school.id, role: 'owner' },
+        order: { createdAt: 'ASC' },
+      });
+      return owner
+        ? { id: owner.id, name: owner.name, email: owner.email, isActive: owner.isActive }
+        : null;
+    });
+  }
+
+  /**
+   * Update (or create) the school's admin/owner — change name/email and/or
+   * reset the password. Operates on the school's own tenant schema.
+   */
+  async setOwner(
+    id: string,
+    dto: { name?: string; email?: string; password?: string },
+  ) {
+    const school = await this.findOne(id);
+    const rounds = Number(this.config.get('BCRYPT_ROUNDS', 12));
+
+    return this.tenantSchema.runInSchema(school.schemaName, async (em) => {
+      const userRepo = em.getRepository(User);
+      const owner = await userRepo.findOne({
+        where: { schoolId: school.id, role: 'owner' },
+        order: { createdAt: 'ASC' },
+      });
+
+      // No owner yet → create one (all fields required).
+      if (!owner) {
+        if (!dto.name || !dto.email || !dto.password) {
+          throw new BadRequestException(
+            'Name, email and password are all required to create the school admin.',
+          );
+        }
+        const dup = await userRepo.findOne({
+          where: { schoolId: school.id, email: dto.email },
+        });
+        if (dup) {
+          throw new ConflictException(
+            'A user with this email already exists for this school.',
+          );
+        }
+        const created = await userRepo.save(
+          userRepo.create({
+            schoolId: school.id,
+            name: dto.name,
+            email: dto.email,
+            passwordHash: await bcrypt.hash(dto.password, rounds),
+            pinHash: null,
+            role: 'owner',
+            isActive: true,
+          }),
+        );
+        return {
+          id: created.id,
+          name: created.name,
+          email: created.email,
+          created: true,
+        };
+      }
+
+      // Update existing owner.
+      if (dto.email && dto.email !== owner.email) {
+        const dup = await userRepo.findOne({
+          where: { schoolId: school.id, email: dto.email },
+        });
+        if (dup && dup.id !== owner.id) {
+          throw new ConflictException(
+            'A user with this email already exists for this school.',
+          );
+        }
+        owner.email = dto.email;
+      }
+      if (dto.name) owner.name = dto.name;
+      if (dto.password) {
+        owner.passwordHash = await bcrypt.hash(dto.password, rounds);
+      }
+      owner.isActive = true;
+      await userRepo.save(owner);
+      return {
+        id: owner.id,
+        name: owner.name,
+        email: owner.email,
+        created: false,
+      };
+    });
   }
 
   /** Create or reset the school owner user in the tenant schema. */
