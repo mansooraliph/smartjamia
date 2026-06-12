@@ -13,6 +13,7 @@ import { PromotionPage } from '@/pages/academics/PromotionPage';
 import { VisitorsPage } from '@/pages/visitors/VisitorsPage';
 import { VisitsPage } from '@/pages/visitors/VisitsPage';
 import { StaffPage } from '@/pages/staff/StaffPage';
+import { StaffViewPage } from '@/pages/staff/StaffViewPage';
 import { AcademicYearsPage } from '@/pages/setup/AcademicYearsPage';
 import { ClassesPage } from '@/pages/setup/ClassesPage';
 import { SubjectsPage } from '@/pages/setup/SubjectsPage';
@@ -158,6 +159,7 @@ export function AppRoutes() {
           element={<TransferCertificatesPage />}
         />
         <Route path="staff" element={<StaffPage />} />
+        <Route path="staff/:id" element={<StaffViewPage />} />
         <Route path="parents" element={<ParentsPage />} />
 
         {/* Operations */}

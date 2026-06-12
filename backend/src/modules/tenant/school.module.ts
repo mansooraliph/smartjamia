@@ -49,6 +49,8 @@ import { VisitsService } from './visitors/visits.service';
 import { StaffController } from './staff/staff.controller';
 import { StaffService } from './staff/staff.service';
 import { StaffImportService } from './staff/staff-import.service';
+import { StaffDocumentsController } from './staff/staff-documents.controller';
+import { StaffDocumentsService } from './staff/staff-documents.service';
 
 import { SchoolStatsController } from './stats/school-stats.controller';
 import { SchoolStatsService } from './stats/school-stats.service';
@@ -89,6 +91,7 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
     QualificationsController,
     DocumentsController,
     UploadsController,
+    StaffDocumentsController,
     AcademicsController,
     SettingsController,
     VisitorsController,
@@ -123,6 +126,7 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
     PortalService,
     StaffService,
     StaffImportService,
+    StaffDocumentsService,
     AttendanceService,
     ExamsService,
     TimetableService,

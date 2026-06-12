@@ -8,6 +8,7 @@ import {
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Search, Upload } from 'lucide-react';
 import { ExportFormat, RbacApi, Staff, StaffApi } from '@/services/school.api';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -70,6 +71,8 @@ const roleTone: Record<string, 'blue' | 'indigo' | 'purple' | 'slate'> = {
 
 export function StaffPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [modal, setModal] = useState<{ open: boolean; staff?: Staff }>({
     open: false,
   });
@@ -92,6 +95,18 @@ export function StaffPage() {
     placeholderData: keepPreviousData,
   });
   const staff = pageData?.items ?? [];
+
+  // Open the edit modal when arriving from the staff profile's "Edit" button.
+  const editId = (location.state as { editId?: string } | null)?.editId;
+  useEffect(() => {
+    if (editId && staff.length) {
+      const s = staff.find((x) => x.id === editId);
+      if (s) {
+        setModal({ open: true, staff: s });
+        navigate(location.pathname, { replace: true, state: null });
+      }
+    }
+  }, [editId, staff, navigate, location.pathname]);
 
   const upsert = useMutation({
     mutationFn: (v: { id?: string; payload: Record<string, unknown> }) =>
@@ -174,9 +189,13 @@ export function StaffPage() {
             header: 'Name',
             render: (s) => (
               <div className="leading-tight">
-                <div className="font-medium text-slate-900">
+                <button
+                  className="font-medium text-slate-900 hover:text-brand-600 hover:underline"
+                  onClick={() => navigate(`/staff/${s.id}`)}
+                  title="View profile"
+                >
                   {s.user?.name ?? '—'}
-                </div>
+                </button>
                 <div className="text-xs text-slate-500">{s.user?.email}</div>
               </div>
             ),

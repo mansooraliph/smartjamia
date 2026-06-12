@@ -1143,6 +1143,8 @@ export interface StaffListParams extends ListParams {
 export const StaffApi = {
   list: async (params?: StaffListParams): Promise<Paginated<Staff>> =>
     unwrap(await api.get('/school/staff', { params })),
+  get: async (id: string): Promise<Staff> =>
+    unwrap(await api.get(`/school/staff/${id}`)),
   create: async (data: Record<string, unknown>): Promise<Staff> =>
     unwrap(await api.post('/school/staff', data)),
   update: async (id: string, data: Record<string, unknown>): Promise<Staff> =>
@@ -1166,6 +1168,45 @@ export const StaffApi = {
     fd.append('file', file);
     return unwrap(await api.post('/school/staff/import/commit', fd));
   },
+};
+
+// ───── Staff documents ──────────────────────────────────────────────────────
+export type StaffDocumentType =
+  | 'aadhaar'
+  | 'pan'
+  | 'id_proof'
+  | 'address_proof'
+  | 'resume'
+  | 'certificate'
+  | 'qualification'
+  | 'experience'
+  | 'contract'
+  | 'photo'
+  | 'other';
+export interface StaffDocument {
+  id: string;
+  schoolId: string;
+  staffId: string;
+  type: StaffDocumentType;
+  title: string;
+  fileUrl: string;
+  fileName: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export const StaffDocumentsApi = {
+  list: async (staffId: string): Promise<StaffDocument[]> =>
+    unwrap(await api.get('/school/staff-documents', { params: { staffId } })),
+  create: async (data: Record<string, unknown>): Promise<StaffDocument> =>
+    unwrap(await api.post('/school/staff-documents', data)),
+  update: async (
+    id: string,
+    data: Record<string, unknown>,
+  ): Promise<StaffDocument> =>
+    unwrap(await api.patch(`/school/staff-documents/${id}`, data)),
+  remove: async (id: string) =>
+    unwrap(await api.delete(`/school/staff-documents/${id}`)),
 };
 
 // ───── Exams & Marks ────────────────────────────────────────────────────────

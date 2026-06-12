@@ -33,6 +33,7 @@ import { Concession } from './tenant/concession.entity';
 import { FeeCollection } from './tenant/fee-collection.entity';
 import { Payment } from './tenant/payment.entity';
 import { Staff } from './tenant/staff.entity';
+import { StaffDocument } from './tenant/staff-document.entity';
 import { Timetable } from './tenant/timetable.entity';
 import { Leave } from './tenant/leave.entity';
 import { Announcement } from './tenant/announcement.entity';
@@ -74,6 +75,7 @@ export const TENANT_ENTITIES = [
   FeeCollection,
   Payment,
   Staff,
+  StaffDocument,
   Timetable,
   Leave,
   Announcement,
