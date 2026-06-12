@@ -6,6 +6,7 @@ import {
 import { EntityManager, In } from 'typeorm';
 import { AcademicYear } from '../../../database/tenant/academic-year.entity';
 import { ClassEntity } from '../../../database/tenant/class.entity';
+import { Course } from '../../../database/tenant/course.entity';
 import { Section } from '../../../database/tenant/section.entity';
 import { Student } from '../../../database/tenant/student.entity';
 import { StudentEnrollment } from '../../../database/tenant/student-enrollment.entity';
@@ -94,9 +95,12 @@ export class AcademicsService {
         .groupBy('e.classId')
         .getRawMany<{ classId: string; cnt: string }>();
       const counts = new Map(rows.map((r) => [r.classId, Number(r.cnt)]));
+      const courses = await em.getRepository(Course).find({ where: { schoolId } });
+      const courseName = new Map(courses.map((c) => [c.id, c.name]));
       return classes.map((c) => ({
         id: c.id,
         name: c.name,
+        courseName: c.courseId ? courseName.get(c.courseId) ?? null : null,
         orderIndex: c.orderIndex,
         activeStudents: counts.get(c.id) ?? 0,
       }));

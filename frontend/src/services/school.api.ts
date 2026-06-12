@@ -18,11 +18,25 @@ export interface ClassEntity {
   schoolId: string;
   academicYearId: string;
   courseId?: string | null;
+  /** Resolved course name (college mode) — null when unassigned/school mode. */
+  courseName?: string | null;
   name: string;
   orderIndex: number;
   createdAt: string;
   updatedAt: string;
   sections?: Section[];
+}
+
+/**
+ * Display label for a class. In college mode classes reuse names like
+ * "Semester 1" across courses, so prefix the course to disambiguate
+ * (e.g. "B.Sc CS · Semester 1"). Falls back to the bare name.
+ */
+export function classLabel(cls: {
+  name: string;
+  courseName?: string | null;
+}): string {
+  return cls.courseName ? `${cls.courseName} · ${cls.name}` : cls.name;
 }
 
 export type CourseLevel =

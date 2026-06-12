@@ -3,10 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { IsNull } from 'typeorm';
+import { EntityManager, IsNull } from 'typeorm';
 import { ClassEntity } from '../../../database/tenant/class.entity';
 import { Section } from '../../../database/tenant/section.entity';
 import { AcademicYear } from '../../../database/tenant/academic-year.entity';
+import { Course } from '../../../database/tenant/course.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
 import { CreateClassDto, UpdateClassDto } from './dto/class.dto';
 import { CreateSectionDto, UpdateSectionDto } from './dto/section.dto';
@@ -14,6 +15,20 @@ import { CreateSectionDto, UpdateSectionDto } from './dto/section.dto';
 @Injectable()
 export class ClassesService {
   constructor(private readonly tenant: TenantSchemaService) {}
+
+  /** Map each class's courseId → course name (null when unassigned/school mode). */
+  private async courseNames(
+    em: EntityManager,
+    schoolId: string,
+    classes: ClassEntity[],
+  ): Promise<Map<string, string>> {
+    const ids = [
+      ...new Set(classes.map((c) => c.courseId).filter(Boolean) as string[]),
+    ];
+    if (ids.length === 0) return new Map();
+    const courses = await em.getRepository(Course).find({ where: { schoolId } });
+    return new Map(courses.map((c) => [c.id, c.name]));
+  }
 
   // ─── Classes ──────────────────────────────────────────────────────────────
   list(
@@ -23,7 +38,7 @@ export class ClassesService {
     courseId?: string,
   ) {
     return this.tenant.runInSchema(schemaName, async (em) => {
-      return em.getRepository(ClassEntity).find({
+      const classes = await em.getRepository(ClassEntity).find({
         where: {
           schoolId,
           ...(academicYearId ? { academicYearId } : {}),
@@ -31,6 +46,11 @@ export class ClassesService {
         },
         order: { orderIndex: 'ASC', name: 'ASC' },
       });
+      const names = await this.courseNames(em, schoolId, classes);
+      return classes.map((c) => ({
+        ...c,
+        courseName: c.courseId ? names.get(c.courseId) ?? null : null,
+      }));
     });
   }
 
@@ -86,8 +106,10 @@ export class ClassesService {
         arr.push(s);
         byClass.set(s.classId, arr);
       }
+      const names = await this.courseNames(em, schoolId, classes);
       return classes.map((c) => ({
         ...c,
+        courseName: c.courseId ? names.get(c.courseId) ?? null : null,
         sections: byClass.get(c.id) ?? [],
       }));
     });
