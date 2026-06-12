@@ -34,8 +34,27 @@ export class Parent {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'phone_country_code',
+    nullable: true,
+  })
+  phoneCountryCode: string | null;
+
   @Column({ type: 'varchar', length: 20 })
   phone: string;
+
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'whatsapp_country_code',
+    nullable: true,
+  })
+  whatsappCountryCode: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  whatsapp: string | null;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   email: string | null;

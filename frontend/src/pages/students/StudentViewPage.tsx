@@ -36,6 +36,7 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/Input';
 import { formatDate } from '@/lib/format';
+import { formatPhone } from '@/lib/phone';
 import { useTerminology } from '@/hooks/useTerminology';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -305,6 +306,14 @@ function OverviewTab({
       <section className="card p-5">
         <h3 className="mb-4 font-semibold text-slate-900">Address & contact</h3>
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Row
+            label="Mobile"
+            value={formatPhone(student.mobileCountryCode, student.mobile)}
+          />
+          <Row
+            label="WhatsApp"
+            value={formatPhone(student.whatsappCountryCode, student.whatsapp)}
+          />
           <Row label="Address" value={student.address} />
           <Row label="City" value={student.city} />
           <Row label="State" value={student.state} />
@@ -375,7 +384,10 @@ function ParentsTab({
               </div>
               <div className="mt-2 space-y-1 text-sm text-slate-600">
                 <div className="font-medium text-slate-800">{p.name}</div>
-                <div>📞 {p.phone}</div>
+                <div>📞 {formatPhone(p.phoneCountryCode, p.phone)}</div>
+                {p.whatsapp && (
+                  <div>💬 {formatPhone(p.whatsappCountryCode, p.whatsapp)}</div>
+                )}
                 {p.email && <div>✉️ {p.email}</div>}
                 {p.occupation && <div>💼 {p.occupation}</div>}
                 {p.annualIncome != null && (

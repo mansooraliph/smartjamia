@@ -103,6 +103,10 @@ export interface Student {
   caste: string | null;
   aadharNumber: string | null;
   photoUrl: string | null;
+  mobileCountryCode: string | null;
+  mobile: string | null;
+  whatsappCountryCode: string | null;
+  whatsapp: string | null;
   address: string | null;
   city: string | null;
   state: string | null;
@@ -146,6 +150,10 @@ export interface Staff {
   pan: string | null;
   aadhar: string | null;
   address: string | null;
+  mobileCountryCode: string | null;
+  mobile: string | null;
+  whatsappCountryCode: string | null;
+  whatsapp: string | null;
   photoUrl: string | null;
   status: 'active' | 'on_leave' | 'resigned' | 'terminated';
   createdAt: string;
@@ -943,7 +951,10 @@ export interface Parent {
   studentId: string;
   relation: ParentRelation;
   name: string;
+  phoneCountryCode: string | null;
   phone: string;
+  whatsappCountryCode: string | null;
+  whatsapp: string | null;
   email: string | null;
   occupation: string | null;
   annualIncome: number | null;

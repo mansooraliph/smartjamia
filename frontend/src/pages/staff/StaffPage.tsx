@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/Input';
+import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE } from '@/lib/phone';
 import { formatDate, formatMoney, paiseToRupees, rupeesToPaise } from '@/lib/format';
 
 const ROLES = ['admin', 'manager', 'teacher', 'staff', 'cashier'] as const;
@@ -43,6 +44,10 @@ const schema = z.object({
   pan: z.string().optional().or(z.literal('')),
   aadhar: z.string().optional().or(z.literal('')),
   address: z.string().optional().or(z.literal('')),
+  mobileCountryCode: z.string(),
+  mobile: z.string().optional().or(z.literal('')),
+  whatsappCountryCode: z.string(),
+  whatsapp: z.string().optional().or(z.literal('')),
   status: z.enum(STATUSES),
 });
 type FormValues = z.infer<typeof schema>;
@@ -294,6 +299,12 @@ export function StaffPage() {
               pan: v.pan || undefined,
               aadhar: v.aadhar || undefined,
               address: v.address || undefined,
+              mobileCountryCode: v.mobile ? v.mobileCountryCode : undefined,
+              mobile: v.mobile || undefined,
+              whatsappCountryCode: v.whatsapp
+                ? v.whatsappCountryCode
+                : undefined,
+              whatsapp: v.whatsapp || undefined,
               status: v.status,
             },
           })
@@ -352,6 +363,10 @@ function StaffFormModal({
       pan: staff?.pan ?? '',
       aadhar: staff?.aadhar ?? '',
       address: staff?.address ?? '',
+      mobileCountryCode: staff?.mobileCountryCode ?? DEFAULT_COUNTRY_CODE,
+      mobile: staff?.mobile ?? '',
+      whatsappCountryCode: staff?.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE,
+      whatsapp: staff?.whatsapp ?? '',
       status: (staff?.status as FormValues['status']) ?? 'active',
     },
   });
@@ -469,6 +484,42 @@ function StaffFormModal({
               </option>
             ))}
           </Select>
+        </Field>
+
+        <Field label="Mobile">
+          <div className="flex gap-2">
+            <Select {...register('mobileCountryCode')} className="!w-24 shrink-0">
+              {COUNTRY_CODES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code}
+                </option>
+              ))}
+            </Select>
+            <Input
+              {...register('mobile')}
+              placeholder="9876543210"
+              className="flex-1"
+            />
+          </div>
+        </Field>
+        <Field label="WhatsApp">
+          <div className="flex gap-2">
+            <Select
+              {...register('whatsappCountryCode')}
+              className="!w-24 shrink-0"
+            >
+              {COUNTRY_CODES.map((c) => (
+                <option key={c.code} value={c.code}>
+                  {c.code}
+                </option>
+              ))}
+            </Select>
+            <Input
+              {...register('whatsapp')}
+              placeholder="WhatsApp number"
+              className="flex-1"
+            />
+          </div>
         </Field>
 
         <Field label="Qualification" className="sm:col-span-3">

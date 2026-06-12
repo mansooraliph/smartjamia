@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select } from '@/components/ui/Input';
+import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE } from '@/lib/phone';
 import { ImportModal } from '@/components/shared/ImportModal';
 import { PortalPinModal } from '@/components/shared/PortalPinModal';
 
@@ -40,7 +41,10 @@ const schema = z.object({
   studentId: z.string().uuid('Select a student'),
   relation: z.enum(['father', 'mother', 'guardian']),
   name: z.string().min(1, 'Required'),
+  phoneCountryCode: z.string(),
   phone: z.string().min(1, 'Required'),
+  whatsappCountryCode: z.string(),
+  whatsapp: z.string().optional().or(z.literal('')),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
   occupation: z.string().optional().or(z.literal('')),
   annualIncome: z.coerce.number().min(0).optional(),
@@ -311,7 +315,10 @@ export function ParentsPage() {
             studentId: v.studentId,
             relation: v.relation,
             name: v.name,
+            phoneCountryCode: v.phoneCountryCode || undefined,
             phone: v.phone,
+            whatsappCountryCode: v.whatsapp ? v.whatsappCountryCode : undefined,
+            whatsapp: v.whatsapp || undefined,
             email: v.email || undefined,
             occupation: v.occupation || undefined,
             annualIncome:
@@ -398,7 +405,11 @@ function ParentFormModal({
         studentId: parent?.studentId ?? defaultStudentId ?? '',
         relation: (parent?.relation as ParentRelation) ?? 'father',
         name: parent?.name ?? '',
+        phoneCountryCode: parent?.phoneCountryCode ?? DEFAULT_COUNTRY_CODE,
         phone: parent?.phone ?? '',
+        whatsappCountryCode:
+          parent?.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE,
+        whatsapp: parent?.whatsapp ?? '',
         email: parent?.email ?? '',
         occupation: parent?.occupation ?? '',
         annualIncome: parent?.annualIncome ?? undefined,
@@ -463,8 +474,40 @@ function ParentFormModal({
             <Input {...register('name')} />
           </Field>
 
-          <Field label="Phone" required error={errors.phone?.message}>
-            <Input {...register('phone')} placeholder="9876543210" />
+          <Field label="Mobile" required error={errors.phone?.message}>
+            <div className="flex gap-2">
+              <Select {...register('phoneCountryCode')} className="!w-24 shrink-0">
+                {COUNTRY_CODES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                {...register('phone')}
+                placeholder="9876543210"
+                className="flex-1"
+              />
+            </div>
+          </Field>
+          <Field label="WhatsApp">
+            <div className="flex gap-2">
+              <Select
+                {...register('whatsappCountryCode')}
+                className="!w-24 shrink-0"
+              >
+                {COUNTRY_CODES.map((c) => (
+                  <option key={c.code} value={c.code}>
+                    {c.code}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                {...register('whatsapp')}
+                placeholder="WhatsApp number"
+                className="flex-1"
+              />
+            </div>
           </Field>
           <Field label="Email" error={errors.email?.message}>
             <Input type="email" {...register('email')} />

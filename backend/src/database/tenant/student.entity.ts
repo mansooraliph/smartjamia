@@ -57,6 +57,28 @@ export class Student {
   @Column({ type: 'varchar', length: 500, name: 'photo_url', nullable: true })
   photoUrl: string | null;
 
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'mobile_country_code',
+    nullable: true,
+  })
+  mobileCountryCode: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  mobile: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'whatsapp_country_code',
+    nullable: true,
+  })
+  whatsappCountryCode: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  whatsapp: string | null;
+
   @Column({ type: 'text', nullable: true })
   address: string | null;
 

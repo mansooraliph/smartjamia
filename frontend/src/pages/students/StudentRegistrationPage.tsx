@@ -15,6 +15,7 @@ import {
 } from '@/services/school.api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Field, Input, Select, Textarea, Checkbox } from '@/components/ui/Input';
+import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE } from '@/lib/phone';
 import { useTerminology } from '@/hooks/useTerminology';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -32,7 +33,10 @@ const parentSchema = z
     id: z.string().optional(),
     relation: z.enum(RELATIONS),
     name: z.string().optional().or(z.literal('')),
+    phoneCountryCode: z.string(),
     phone: z.string().optional().or(z.literal('')),
+    whatsappCountryCode: z.string(),
+    whatsapp: z.string().optional().or(z.literal('')),
     email: z.string().email('Invalid email').optional().or(z.literal('')),
     occupation: z.string().optional().or(z.literal('')),
     annualIncome: z.string().optional().or(z.literal('')),
@@ -68,6 +72,10 @@ const schema = z
     religion: z.string().optional().or(z.literal('')),
     caste: z.string().optional().or(z.literal('')),
     aadharNumber: z.string().optional().or(z.literal('')),
+    mobileCountryCode: z.string(),
+    mobile: z.string().optional().or(z.literal('')),
+    whatsappCountryCode: z.string(),
+    whatsapp: z.string().optional().or(z.literal('')),
     address: z.string().optional().or(z.literal('')),
     city: z.string().optional().or(z.literal('')),
     state: z.string().optional().or(z.literal('')),
@@ -103,7 +111,10 @@ type FormValues = z.infer<typeof schema>;
 const emptyParent = (): FormValues['parents'][number] => ({
   relation: 'father',
   name: '',
+  phoneCountryCode: DEFAULT_COUNTRY_CODE,
   phone: '',
+  whatsappCountryCode: DEFAULT_COUNTRY_CODE,
+  whatsapp: '',
   email: '',
   occupation: '',
   annualIncome: '',
@@ -172,6 +183,10 @@ export function StudentRegistrationPage() {
       religion: '',
       caste: '',
       aadharNumber: '',
+      mobileCountryCode: DEFAULT_COUNTRY_CODE,
+      mobile: '',
+      whatsappCountryCode: DEFAULT_COUNTRY_CODE,
+      whatsapp: '',
       address: '',
       city: '',
       state: '',
@@ -209,6 +224,11 @@ export function StudentRegistrationPage() {
         religion: student.religion ?? '',
         caste: student.caste ?? '',
         aadharNumber: student.aadharNumber ?? '',
+        mobileCountryCode: student.mobileCountryCode ?? DEFAULT_COUNTRY_CODE,
+        mobile: student.mobile ?? '',
+        whatsappCountryCode:
+          student.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE,
+        whatsapp: student.whatsapp ?? '',
         address: student.address ?? '',
         city: student.city ?? '',
         state: student.state ?? '',
@@ -225,7 +245,11 @@ export function StudentRegistrationPage() {
               id: p.id,
               relation: p.relation,
               name: p.name,
+              phoneCountryCode: p.phoneCountryCode ?? DEFAULT_COUNTRY_CODE,
               phone: p.phone,
+              whatsappCountryCode:
+                p.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE,
+              whatsapp: p.whatsapp ?? '',
               email: p.email ?? '',
               occupation: p.occupation ?? '',
               annualIncome:
@@ -263,7 +287,10 @@ export function StudentRegistrationPage() {
   const toParentPayload = (p: FormValues['parents'][number]) => ({
     relation: p.relation,
     name: p.name,
+    phoneCountryCode: p.phoneCountryCode || undefined,
     phone: p.phone,
+    whatsappCountryCode: p.whatsapp ? p.whatsappCountryCode : undefined,
+    whatsapp: p.whatsapp || undefined,
     email: p.email || undefined,
     occupation: p.occupation || undefined,
     annualIncome: p.annualIncome ? Number(p.annualIncome) : undefined,
@@ -283,6 +310,10 @@ export function StudentRegistrationPage() {
         religion: v.religion || undefined,
         caste: v.caste || undefined,
         aadharNumber: v.aadharNumber || undefined,
+        mobileCountryCode: v.mobile ? v.mobileCountryCode : undefined,
+        mobile: v.mobile || undefined,
+        whatsappCountryCode: v.whatsapp ? v.whatsappCountryCode : undefined,
+        whatsapp: v.whatsapp || undefined,
         address: v.address || undefined,
         city: v.city || undefined,
         state: v.state || undefined,
@@ -405,6 +436,21 @@ export function StudentRegistrationPage() {
             </Field>
             <Field label="Aadhaar #">
               <Input {...register('aadharNumber')} placeholder="12 digits" />
+            </Field>
+
+            <Field label="Mobile">
+              <PhoneInputs
+                codeReg={register('mobileCountryCode')}
+                numReg={register('mobile')}
+                placeholder="9876543210"
+              />
+            </Field>
+            <Field label="WhatsApp">
+              <PhoneInputs
+                codeReg={register('whatsappCountryCode')}
+                numReg={register('whatsapp')}
+                placeholder="WhatsApp number"
+              />
             </Field>
 
             <Field
@@ -546,10 +592,21 @@ export function StudentRegistrationPage() {
                     <Input {...register(`parents.${i}.name`)} />
                   </Field>
                   <Field
-                    label="Phone"
+                    label="Mobile"
                     error={errors.parents?.[i]?.phone?.message}
                   >
-                    <Input {...register(`parents.${i}.phone`)} />
+                    <PhoneInputs
+                      codeReg={register(`parents.${i}.phoneCountryCode`)}
+                      numReg={register(`parents.${i}.phone`)}
+                      placeholder="Mobile"
+                    />
+                  </Field>
+                  <Field label="WhatsApp">
+                    <PhoneInputs
+                      codeReg={register(`parents.${i}.whatsappCountryCode`)}
+                      numReg={register(`parents.${i}.whatsapp`)}
+                      placeholder="WhatsApp"
+                    />
                   </Field>
                   <Field
                     label="Email"
@@ -613,6 +670,29 @@ export function StudentRegistrationPage() {
         </div>
       </form>
     </>
+  );
+}
+
+function PhoneInputs({
+  codeReg,
+  numReg,
+  placeholder,
+}: {
+  codeReg: ReturnType<ReturnType<typeof useForm>['register']>;
+  numReg: ReturnType<ReturnType<typeof useForm>['register']>;
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex gap-2">
+      <Select {...codeReg} className="!w-24 shrink-0">
+        {COUNTRY_CODES.map((c) => (
+          <option key={c.code} value={c.code}>
+            {c.code}
+          </option>
+        ))}
+      </Select>
+      <Input {...numReg} placeholder={placeholder} className="flex-1" />
+    </div>
   );
 }
 

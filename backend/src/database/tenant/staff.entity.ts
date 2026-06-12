@@ -70,6 +70,28 @@ export class Staff {
   photoUrl: string | null;
 
   @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'mobile_country_code',
+    nullable: true,
+  })
+  mobileCountryCode: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  mobile: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 8,
+    name: 'whatsapp_country_code',
+    nullable: true,
+  })
+  whatsappCountryCode: string | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  whatsapp: string | null;
+
+  @Column({
     type: 'enum',
     enum: ['active', 'on_leave', 'resigned', 'terminated'],
     default: 'active',

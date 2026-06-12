@@ -40,10 +40,28 @@ export class NestedParentDto {
   @Length(1, 255)
   name: string;
 
+  @ApiPropertyOptional({ example: '+91' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 8)
+  phoneCountryCode?: string;
+
   @ApiProperty()
   @IsString()
   @Length(1, 20)
   phone: string;
+
+  @ApiPropertyOptional({ example: '+91' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 8)
+  whatsappCountryCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(1, 20)
+  whatsapp?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -142,6 +160,30 @@ export class CreateStudentDto {
   @IsOptional()
   @IsString()
   pincode?: string;
+
+  @ApiPropertyOptional({ example: '+91' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 8)
+  mobileCountryCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(1, 20)
+  mobile?: string;
+
+  @ApiPropertyOptional({ example: '+91' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 8)
+  whatsappCountryCode?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(1, 20)
+  whatsapp?: string;
 
   @ApiPropertyOptional()
   @IsOptional()
