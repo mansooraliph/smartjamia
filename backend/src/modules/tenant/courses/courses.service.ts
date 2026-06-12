@@ -140,7 +140,13 @@ export class CoursesService {
       if (dto.durationYears !== undefined)
         course.durationYears = dto.durationYears;
       if (dto.orderIndex !== undefined) course.orderIndex = dto.orderIndex;
-      return repo.save(course);
+      const saved = await repo.save(course);
+
+      // Materialize any classes that don't exist yet (idempotent). This fills
+      // in structures for courses created before auto-generation existed, and
+      // adds the extra terms when the structure grows.
+      const classesGenerated = await this.generateClasses(em, schoolId, saved);
+      return { ...saved, classesGenerated };
     });
   }
 
