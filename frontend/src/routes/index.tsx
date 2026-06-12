@@ -5,6 +5,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { StudentsPage } from '@/pages/students/StudentsPage';
+import { StudentRegistrationPage } from '@/pages/students/StudentRegistrationPage';
 import { TransferCertificatesPage } from '@/pages/students/TransferCertificatesPage';
 import { ParentsPage } from '@/pages/parents/ParentsPage';
 import { PromotionPage } from '@/pages/academics/PromotionPage';
@@ -145,6 +146,11 @@ export function AppRoutes() {
 
         {/* People */}
         <Route path="students" element={<StudentsPage />} />
+        <Route path="students/new" element={<StudentRegistrationPage />} />
+        <Route
+          path="students/:id/edit"
+          element={<StudentRegistrationPage />}
+        />
         <Route
           path="transfer-certificates"
           element={<TransferCertificatesPage />}

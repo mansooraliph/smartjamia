@@ -1,12 +1,19 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
+  IsArray,
+  IsBoolean,
   IsDateString,
+  IsEmail,
   IsEnum,
   IsIn,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
   Length,
+  Min,
+  ValidateNested,
 } from 'class-validator';
 import { PaginationDto } from '../../../../common/dto/pagination.dto';
 
@@ -17,6 +24,55 @@ export const STUDENT_STATUSES = [
   'transferred',
   'alumni',
 ] as const;
+export const PARENT_RELATIONS = ['father', 'mother', 'guardian'] as const;
+
+/**
+ * Parent/guardian supplied inline with a new student. No studentId — it's the
+ * student being created in the same transaction.
+ */
+export class NestedParentDto {
+  @ApiProperty({ enum: PARENT_RELATIONS })
+  @IsEnum(PARENT_RELATIONS)
+  relation: (typeof PARENT_RELATIONS)[number];
+
+  @ApiProperty()
+  @IsString()
+  @Length(1, 255)
+  name: string;
+
+  @ApiProperty()
+  @IsString()
+  @Length(1, 20)
+  phone: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEmail()
+  email?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  occupation?: string;
+
+  @ApiPropertyOptional({ description: 'Annual income in rupees' })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  annualIncome?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Length(1, 12)
+  aadharNumber?: string;
+
+  @ApiPropertyOptional({ default: false })
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
+}
 
 export class CreateStudentDto {
   @ApiProperty({ example: 'ADM2026001' })
@@ -121,9 +177,23 @@ export class CreateStudentDto {
   @IsOptional()
   @IsString()
   rollNumber?: string;
+
+  // ─── Optional inline parents/guardians ────────────────────────────────────
+  @ApiPropertyOptional({ type: [NestedParentDto] })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NestedParentDto)
+  parents?: NestedParentDto[];
 }
 
-export class UpdateStudentDto extends PartialType(CreateStudentDto) {}
+// Parents are managed separately on edit (via the parents endpoints), so the
+// update DTO drops the inline-parents field.
+export class UpdateStudentDto extends PartialType(CreateStudentDto) {
+  @ApiPropertyOptional({ readOnly: true })
+  @IsOptional()
+  parents?: never;
+}
 
 export class StudentListQueryDto extends PaginationDto {
   @ApiPropertyOptional()

@@ -10,6 +10,7 @@ import { StudentEnrollment } from '../../../database/tenant/student-enrollment.e
 import { Section } from '../../../database/tenant/section.entity';
 import { ClassEntity } from '../../../database/tenant/class.entity';
 import { AcademicYear } from '../../../database/tenant/academic-year.entity';
+import { Parent } from '../../../database/tenant/parent.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
 import { paginate } from '../../../common/dto/pagination.dto';
 import { CreateStudentDto, UpdateStudentDto } from './dto/student.dto';
@@ -242,6 +243,32 @@ export class StudentsService {
         dto,
         new Date(dto.admissionDate),
       );
+
+      // Inline parents/guardians — created in the SAME transaction so a bad
+      // parent rolls back the whole admission (no orphaned student).
+      if (dto.parents?.length) {
+        const parentRepo = em.getRepository(Parent);
+        let primaryTaken = false;
+        for (const p of dto.parents) {
+          const isPrimary = !!p.isPrimary && !primaryTaken;
+          if (isPrimary) primaryTaken = true;
+          await parentRepo.save(
+            parentRepo.create({
+              schoolId,
+              studentId: student.id,
+              relation: p.relation,
+              name: p.name,
+              phone: p.phone,
+              email: p.email ?? null,
+              occupation: p.occupation ?? null,
+              annualIncome: p.annualIncome ?? null,
+              aadharNumber: p.aadharNumber ?? null,
+              isPrimary,
+              userId: null,
+            }),
+          );
+        }
+      }
 
       // Resolve within the SAME transaction — calling this.findOne() here would
       // open a separate transaction that can't see this not-yet-committed insert.
