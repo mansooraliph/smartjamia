@@ -139,6 +139,14 @@ export class StudentsService {
         lastName: s.lastName,
         gender: s.gender,
         dateOfBirth: s.dateOfBirth,
+        bloodGroup: s.bloodGroup ?? '',
+        religion: s.religion ?? '',
+        caste: s.caste ?? '',
+        aadharNumber: s.aadharNumber ?? '',
+        mobileCountryCode: s.mobileCountryCode ?? '',
+        mobile: s.mobile ?? '',
+        whatsappCountryCode: s.whatsappCountryCode ?? '',
+        whatsapp: s.whatsapp ?? '',
         className: s.enrollment ? cMap.get(s.enrollment.classId) ?? '' : '',
         sectionName:
           s.enrollment?.sectionId != null
@@ -147,8 +155,11 @@ export class StudentsService {
         rollNumber: s.enrollment?.rollNumber ?? '',
         status: s.status,
         admissionDate: s.admissionDate,
+        address: s.address ?? '',
         city: s.city ?? '',
-        phone: '',
+        state: s.state ?? '',
+        pincode: s.pincode ?? '',
+        previousSchool: s.previousSchool ?? '',
       }));
     });
   }
