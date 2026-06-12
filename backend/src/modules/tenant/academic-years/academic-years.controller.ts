@@ -3,12 +3,14 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { IsUUID } from 'class-validator';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TenantJwtGuard } from '../../../common/guards/tenant-jwt.guard';
 import { RolesGuard } from '../../../common/guards/roles.guard';
@@ -21,6 +23,11 @@ import {
   CreateAcademicYearDto,
   UpdateAcademicYearDto,
 } from './dto/academic-year.dto';
+
+class CopyStructureDto {
+  @IsUUID()
+  fromYearId: string;
+}
 
 @ApiTags('school/academic-years')
 @ApiBearerAuth('bearer')
@@ -85,6 +92,19 @@ export class AcademicYearsController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ) {
     return this.svc.setLocked(t.schemaName, t.schoolId, id, false);
+  }
+
+  @Post(':id/copy-structure')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Copy courses, classes and sections from another year into this one',
+  })
+  copyStructure(
+    @Tenant() t: TenantContext,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: CopyStructureDto,
+  ) {
+    return this.svc.copyStructure(t.schemaName, t.schoolId, id, dto.fromYearId);
   }
 
   @Delete(':id')

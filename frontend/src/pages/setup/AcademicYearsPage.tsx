@@ -3,14 +3,22 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Pencil, Trash2, CheckCircle2, Lock, Unlock } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  CheckCircle2,
+  Lock,
+  Unlock,
+  Copy,
+} from 'lucide-react';
 import { AcademicYear, AcademicYearsApi } from '@/services/school.api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Field, Input, Checkbox } from '@/components/ui/Input';
+import { Field, Input, Checkbox, Select } from '@/components/ui/Input';
 import { formatDate } from '@/lib/format';
 
 const schema = z.object({
@@ -27,6 +35,10 @@ export function AcademicYearsPage() {
     open: false,
   });
   const [confirm, setConfirm] = useState<{
+    open: boolean;
+    year?: AcademicYear;
+  }>({ open: false });
+  const [copyModal, setCopyModal] = useState<{
     open: boolean;
     year?: AcademicYear;
   }>({ open: false });
@@ -65,6 +77,18 @@ export function AcademicYearsPage() {
       qc.invalidateQueries({ queryKey: ['academic-years'] });
       qc.invalidateQueries({ queryKey: ['school-stats'] });
       setConfirm({ open: false });
+    },
+  });
+
+  const copyStructure = useMutation({
+    mutationFn: (v: { id: string; fromYearId: string }) =>
+      AcademicYearsApi.copyStructure(v.id, v.fromYearId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['academic-years'] });
+      qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: ['classes-with-sections'] });
+      qc.invalidateQueries({ queryKey: ['school-stats'] });
+      setCopyModal({ open: false });
     },
   });
 
@@ -140,6 +164,14 @@ export function AcademicYearsPage() {
               <Pencil className="h-4 w-4" />
             </button>
             <button
+              className="rounded-md p-1.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-30"
+              onClick={() => setCopyModal({ open: true, year: y })}
+              disabled={y.isLocked || years.length < 2}
+              title="Copy classes & sections from another year"
+            >
+              <Copy className="h-4 w-4" />
+            </button>
+            <button
               className="rounded-md p-1.5 text-slate-500 hover:bg-amber-50 hover:text-amber-700"
               onClick={() => toggleLock.mutate(y)}
               title={y.isLocked ? 'Unlock year' : 'Lock year (after promotion)'}
@@ -190,7 +222,107 @@ export function AcademicYearsPage() {
         message={`This permanently deletes ${confirm.year?.name}. All classes/enrollments under it must already be removed.`}
         confirmText="Delete"
       />
+
+      {copyModal.open && copyModal.year && (
+        <CopyStructureModal
+          target={copyModal.year}
+          sources={years.filter((y) => y.id !== copyModal.year!.id)}
+          saving={copyStructure.isPending}
+          result={copyStructure.data}
+          errorMsg={errMsg(copyStructure.error)}
+          onClose={() => {
+            setCopyModal({ open: false });
+            copyStructure.reset();
+          }}
+          onSubmit={(fromYearId) =>
+            copyStructure.mutate({ id: copyModal.year!.id, fromYearId })
+          }
+        />
+      )}
     </>
+  );
+}
+
+function CopyStructureModal({
+  target,
+  sources,
+  onClose,
+  onSubmit,
+  saving,
+  result,
+  errorMsg,
+}: {
+  target: AcademicYear;
+  sources: AcademicYear[];
+  onClose: () => void;
+  onSubmit: (fromYearId: string) => void;
+  saving: boolean;
+  result?: { courses: number; classes: number; sections: number };
+  errorMsg?: string;
+}) {
+  const [fromYearId, setFromYearId] = useState(sources[0]?.id ?? '');
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Copy structure into ${target.name}`}
+      size="md"
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            {result ? 'Close' : 'Cancel'}
+          </button>
+          {!result && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => fromYearId && onSubmit(fromYearId)}
+              disabled={saving || !fromYearId}
+            >
+              {saving ? 'Copying…' : 'Copy structure'}
+            </button>
+          )}
+        </>
+      }
+    >
+      {result ? (
+        <div className="space-y-3">
+          <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+            Copied into <strong>{target.name}</strong>: {result.courses}{' '}
+            course(s), {result.classes} class(es) and {result.sections}{' '}
+            section(s). Existing items were left untouched.
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            Clone the courses, classes and sections from an existing year into{' '}
+            <strong>{target.name}</strong>. Students, enrollments and class-teacher
+            assignments are <em>not</em> copied. Items that already exist are
+            skipped.
+          </p>
+          <Field label="Copy from" required>
+            <Select
+              value={fromYearId}
+              onChange={(e) => setFromYearId(e.target.value)}
+            >
+              {sources.map((y) => (
+                <option key={y.id} value={y.id}>
+                  {y.name}
+                  {y.isCurrent ? ' (current)' : ''}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          {errorMsg && (
+            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorMsg}
+            </div>
+          )}
+        </div>
+      )}
+    </Modal>
   );
 }
 

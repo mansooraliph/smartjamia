@@ -6,6 +6,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  Max,
   Min,
 } from 'class-validator';
 
@@ -17,6 +18,8 @@ export const COURSE_LEVELS = [
   'certificate',
   'other',
 ] as const;
+
+export const TERM_SYSTEMS = ['annual', 'semester', 'trimester'] as const;
 
 export class CreateCourseDto {
   @IsUUID()
@@ -33,6 +36,16 @@ export class CreateCourseDto {
   @IsString()
   @Length(1, 30)
   code?: string;
+
+  @IsOptional()
+  @IsIn(TERM_SYSTEMS)
+  termSystem?: (typeof TERM_SYSTEMS)[number];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(10)
+  durationYears?: number;
 
   @IsOptional()
   @IsInt()

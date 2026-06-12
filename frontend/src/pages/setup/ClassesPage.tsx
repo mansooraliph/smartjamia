@@ -46,6 +46,8 @@ const courseSchema = z.object({
   level: z.enum(['ug', 'pg', 'diploma', 'phd', 'certificate', 'other']),
   name: z.string().min(1, 'Required'),
   code: z.string().optional().or(z.literal('')),
+  termSystem: z.enum(['annual', 'semester', 'trimester']),
+  durationYears: z.coerce.number().int().min(1).max(10),
   orderIndex: z.coerce.number().int().min(0),
 });
 type CourseForm = z.infer<typeof courseSchema>;
@@ -97,6 +99,8 @@ export function ClassesPage() {
       v.id ? CoursesApi.update(v.id, v.payload) : CoursesApi.create(v.payload),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['courses'] });
+      qc.invalidateQueries({ queryKey: ['classes-with-sections'] });
+      qc.invalidateQueries({ queryKey: ['school-stats'] });
       setCourseModal({ open: false });
     },
   });
@@ -732,6 +736,7 @@ function CourseModal({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<CourseForm>({
     resolver: zodResolver(courseSchema),
@@ -739,9 +744,23 @@ function CourseModal({
       level: (course?.level as CourseLevel) ?? 'ug',
       name: course?.name ?? '',
       code: course?.code ?? '',
+      termSystem: course?.termSystem ?? 'annual',
+      durationYears: course?.durationYears ?? 1,
       orderIndex: course?.orderIndex ?? 0,
     },
   });
+
+  const termSystem = watch('termSystem');
+  const durationYears = Number(watch('durationYears')) || 1;
+  const perYear =
+    termSystem === 'semester' ? 2 : termSystem === 'trimester' ? 3 : 1;
+  const termLabel =
+    termSystem === 'semester'
+      ? 'Semester'
+      : termSystem === 'trimester'
+        ? 'Trimester'
+        : 'Year';
+  const genCount = Math.max(1, durationYears) * perYear;
 
   return (
     <Modal
@@ -781,6 +800,25 @@ function CourseModal({
         <Field label="Code" hint="Optional, e.g. BSCCS" error={errors.code?.message}>
           <Input {...register('code')} placeholder="BSCCS" />
         </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Term system" required error={errors.termSystem?.message}>
+            <Select {...register('termSystem')}>
+              <option value="annual">Annual (Years)</option>
+              <option value="semester">Semester</option>
+              <option value="trimester">Trimester</option>
+            </Select>
+          </Field>
+          <Field label="Duration (years)" required error={errors.durationYears?.message}>
+            <Input type="number" min={1} max={10} {...register('durationYears')} />
+          </Field>
+        </div>
+        {!course && (
+          <div className="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            On create, {genCount} {termLabel.toLowerCase()}
+            {genCount === 1 ? '' : 's'} will be auto-generated as classes (
+            {termLabel} 1…{genCount}). You can rename or add more afterwards.
+          </div>
+        )}
         <Field label="Order index" hint="Lower comes first" error={errors.orderIndex?.message}>
           <Input type="number" {...register('orderIndex')} />
         </Field>

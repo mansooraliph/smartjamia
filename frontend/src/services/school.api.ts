@@ -33,6 +33,8 @@ export type CourseLevel =
   | 'certificate'
   | 'other';
 
+export type TermSystem = 'annual' | 'semester' | 'trimester';
+
 export interface Course {
   id: string;
   schoolId: string;
@@ -40,8 +42,11 @@ export interface Course {
   level: CourseLevel;
   name: string;
   code: string | null;
+  termSystem: TermSystem;
+  durationYears: number;
   orderIndex: number;
   classCount?: number;
+  classesGenerated?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -525,6 +530,21 @@ export const AcademicYearsApi = {
     unwrap(await api.post(`/school/academic-years/${id}/unlock`)),
   remove: async (id: string) =>
     unwrap(await api.delete(`/school/academic-years/${id}`)),
+  copyStructure: async (
+    id: string,
+    fromYearId: string,
+  ): Promise<{
+    from: string;
+    to: string;
+    courses: number;
+    classes: number;
+    sections: number;
+  }> =>
+    unwrap(
+      await api.post(`/school/academic-years/${id}/copy-structure`, {
+        fromYearId,
+      }),
+    ),
 };
 
 // ───── Classes & Sections ───────────────────────────────────────────────────
@@ -575,6 +595,8 @@ export const CoursesApi = {
     level: CourseLevel;
     name: string;
     code?: string;
+    termSystem?: TermSystem;
+    durationYears?: number;
     orderIndex?: number;
   }): Promise<Course> => unwrap(await api.post('/school/courses', data)),
   update: async (
@@ -583,6 +605,8 @@ export const CoursesApi = {
       level: CourseLevel;
       name: string;
       code: string;
+      termSystem: TermSystem;
+      durationYears: number;
       orderIndex: number;
     }>,
   ): Promise<Course> => unwrap(await api.patch(`/school/courses/${id}`, data)),

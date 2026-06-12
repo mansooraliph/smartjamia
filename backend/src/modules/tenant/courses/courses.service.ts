@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { EntityManager } from 'typeorm';
 import { Course } from '../../../database/tenant/course.entity';
 import { ClassEntity } from '../../../database/tenant/class.entity';
 import { AcademicYear } from '../../../database/tenant/academic-year.entity';
@@ -53,18 +54,73 @@ export class CoursesService {
           'A course with this name already exists in this academic year',
         );
       }
+      const termSystem = dto.termSystem ?? 'annual';
+      const durationYears = dto.durationYears ?? 1;
       const repo = em.getRepository(Course);
-      return repo.save(
+      const course = await repo.save(
         repo.create({
           schoolId,
           academicYearId: dto.academicYearId,
           level: dto.level,
           name: dto.name,
           code: dto.code?.trim() || null,
+          termSystem,
+          durationYears,
           orderIndex: dto.orderIndex ?? 0,
         }),
       );
+
+      // Auto-generate the course's classes from its structure.
+      const generated = await this.generateClasses(em, schoolId, course);
+      return { ...course, classesGenerated: generated };
     });
+  }
+
+  /** Materialize a course's classes (Year/Semester/Trimester 1..N) from its structure. */
+  private async generateClasses(
+    em: EntityManager,
+    schoolId: string,
+    course: Course,
+  ): Promise<number> {
+    const perYear =
+      course.termSystem === 'semester'
+        ? 2
+        : course.termSystem === 'trimester'
+          ? 3
+          : 1;
+    const label =
+      course.termSystem === 'semester'
+        ? 'Semester'
+        : course.termSystem === 'trimester'
+          ? 'Trimester'
+          : 'Year';
+    const count = Math.max(1, course.durationYears) * perYear;
+
+    const repo = em.getRepository(ClassEntity);
+    let created = 0;
+    for (let n = 1; n <= count; n++) {
+      const name = `${label} ${n}`;
+      const exists = await repo.findOne({
+        where: {
+          schoolId,
+          academicYearId: course.academicYearId,
+          courseId: course.id,
+          name,
+        },
+      });
+      if (exists) continue;
+      await repo.save(
+        repo.create({
+          schoolId,
+          academicYearId: course.academicYearId,
+          courseId: course.id,
+          name,
+          orderIndex: n,
+        }),
+      );
+      created++;
+    }
+    return created;
   }
 
   update(
@@ -80,6 +136,9 @@ export class CoursesService {
       if (dto.level !== undefined) course.level = dto.level;
       if (dto.name !== undefined) course.name = dto.name;
       if (dto.code !== undefined) course.code = dto.code?.trim() || null;
+      if (dto.termSystem !== undefined) course.termSystem = dto.termSystem;
+      if (dto.durationYears !== undefined)
+        course.durationYears = dto.durationYears;
       if (dto.orderIndex !== undefined) course.orderIndex = dto.orderIndex;
       return repo.save(course);
     });
