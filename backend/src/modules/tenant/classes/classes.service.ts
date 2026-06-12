@@ -30,6 +30,22 @@ export class ClassesService {
     return new Map(courses.map((c) => [c.id, c.name]));
   }
 
+  /**
+   * Group classes by course so dropdowns aren't interleaved (every course has
+   * a "Semester 1"). Courses sort by name; classes within a course by their
+   * order. Unassigned classes (school mode) come first.
+   */
+  private byCourse<T extends { courseName?: string | null; orderIndex: number; name: string }>(
+    a: T,
+    b: T,
+  ): number {
+    return (
+      (a.courseName ?? '').localeCompare(b.courseName ?? '') ||
+      a.orderIndex - b.orderIndex ||
+      a.name.localeCompare(b.name)
+    );
+  }
+
   // ─── Classes ──────────────────────────────────────────────────────────────
   list(
     schemaName: string,
@@ -47,10 +63,12 @@ export class ClassesService {
         order: { orderIndex: 'ASC', name: 'ASC' },
       });
       const names = await this.courseNames(em, schoolId, classes);
-      return classes.map((c) => ({
-        ...c,
-        courseName: c.courseId ? names.get(c.courseId) ?? null : null,
-      }));
+      return classes
+        .map((c) => ({
+          ...c,
+          courseName: c.courseId ? names.get(c.courseId) ?? null : null,
+        }))
+        .sort((a, b) => this.byCourse(a, b));
     });
   }
 
@@ -107,11 +125,13 @@ export class ClassesService {
         byClass.set(s.classId, arr);
       }
       const names = await this.courseNames(em, schoolId, classes);
-      return classes.map((c) => ({
-        ...c,
-        courseName: c.courseId ? names.get(c.courseId) ?? null : null,
-        sections: byClass.get(c.id) ?? [],
-      }));
+      return classes
+        .map((c) => ({
+          ...c,
+          courseName: c.courseId ? names.get(c.courseId) ?? null : null,
+          sections: byClass.get(c.id) ?? [],
+        }))
+        .sort((a, b) => this.byCourse(a, b));
     });
   }
 

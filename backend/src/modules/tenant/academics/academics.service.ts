@@ -97,13 +97,20 @@ export class AcademicsService {
       const counts = new Map(rows.map((r) => [r.classId, Number(r.cnt)]));
       const courses = await em.getRepository(Course).find({ where: { schoolId } });
       const courseName = new Map(courses.map((c) => [c.id, c.name]));
-      return classes.map((c) => ({
-        id: c.id,
-        name: c.name,
-        courseName: c.courseId ? courseName.get(c.courseId) ?? null : null,
-        orderIndex: c.orderIndex,
-        activeStudents: counts.get(c.id) ?? 0,
-      }));
+      return classes
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          courseName: c.courseId ? courseName.get(c.courseId) ?? null : null,
+          orderIndex: c.orderIndex,
+          activeStudents: counts.get(c.id) ?? 0,
+        }))
+        .sort(
+          (a, b) =>
+            (a.courseName ?? '').localeCompare(b.courseName ?? '') ||
+            a.orderIndex - b.orderIndex ||
+            a.name.localeCompare(b.name),
+        );
     });
   }
 
