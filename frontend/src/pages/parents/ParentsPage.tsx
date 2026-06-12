@@ -43,6 +43,7 @@ const schema = z.object({
   name: z.string().min(1, 'Required'),
   phoneCountryCode: z.string(),
   phone: z.string().min(1, 'Required'),
+  whatsappSameAsMobile: z.boolean(),
   whatsappCountryCode: z.string(),
   whatsapp: z.string().optional().or(z.literal('')),
   email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -317,8 +318,15 @@ export function ParentsPage() {
             name: v.name,
             phoneCountryCode: v.phoneCountryCode || undefined,
             phone: v.phone,
-            whatsappCountryCode: v.whatsapp ? v.whatsappCountryCode : undefined,
-            whatsapp: v.whatsapp || undefined,
+            whatsappCountryCode: (
+              v.whatsappSameAsMobile ? v.phone : v.whatsapp
+            )
+              ? v.whatsappSameAsMobile
+                ? v.phoneCountryCode
+                : v.whatsappCountryCode
+              : undefined,
+            whatsapp:
+              (v.whatsappSameAsMobile ? v.phone : v.whatsapp) || undefined,
             email: v.email || undefined,
             occupation: v.occupation || undefined,
             annualIncome:
@@ -398,6 +406,7 @@ function ParentFormModal({
       register,
       handleSubmit,
       reset,
+      watch,
       formState: { errors },
     } = useForm<FormValues>({
       resolver: zodResolver(schema),
@@ -407,6 +416,11 @@ function ParentFormModal({
         name: parent?.name ?? '',
         phoneCountryCode: parent?.phoneCountryCode ?? DEFAULT_COUNTRY_CODE,
         phone: parent?.phone ?? '',
+        whatsappSameAsMobile: !parent?.whatsapp
+          ? true
+          : parent.whatsapp === (parent.phone ?? '') &&
+            (parent.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE) ===
+              (parent.phoneCountryCode ?? DEFAULT_COUNTRY_CODE),
         whatsappCountryCode:
           parent?.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE,
         whatsapp: parent?.whatsapp ?? '',
@@ -491,23 +505,33 @@ function ParentFormModal({
             </div>
           </Field>
           <Field label="WhatsApp">
-            <div className="flex gap-2">
-              <Select
-                {...register('whatsappCountryCode')}
-                className="!w-24 shrink-0"
-              >
-                {COUNTRY_CODES.map((c) => (
-                  <option key={c.code} value={c.code}>
-                    {c.code}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                {...register('whatsapp')}
-                placeholder="WhatsApp number"
-                className="flex-1"
+            <label className="mb-1.5 flex items-center gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                {...register('whatsappSameAsMobile')}
               />
-            </div>
+              Same as mobile
+            </label>
+            {!watch('whatsappSameAsMobile') && (
+              <div className="flex gap-2">
+                <Select
+                  {...register('whatsappCountryCode')}
+                  className="!w-24 shrink-0"
+                >
+                  {COUNTRY_CODES.map((c) => (
+                    <option key={c.code} value={c.code}>
+                      {c.code}
+                    </option>
+                  ))}
+                </Select>
+                <Input
+                  {...register('whatsapp')}
+                  placeholder="WhatsApp number"
+                  className="flex-1"
+                />
+              </div>
+            )}
           </Field>
           <Field label="Email" error={errors.email?.message}>
             <Input type="email" {...register('email')} />

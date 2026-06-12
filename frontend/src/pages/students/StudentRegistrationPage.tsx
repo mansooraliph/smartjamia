@@ -35,6 +35,7 @@ const parentSchema = z
     name: z.string().optional().or(z.literal('')),
     phoneCountryCode: z.string(),
     phone: z.string().optional().or(z.literal('')),
+    whatsappSameAsMobile: z.boolean(),
     whatsappCountryCode: z.string(),
     whatsapp: z.string().optional().or(z.literal('')),
     email: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -74,6 +75,7 @@ const schema = z
     aadharNumber: z.string().optional().or(z.literal('')),
     mobileCountryCode: z.string(),
     mobile: z.string().optional().or(z.literal('')),
+    whatsappSameAsMobile: z.boolean(),
     whatsappCountryCode: z.string(),
     whatsapp: z.string().optional().or(z.literal('')),
     address: z.string().optional().or(z.literal('')),
@@ -113,6 +115,7 @@ const emptyParent = (): FormValues['parents'][number] => ({
   name: '',
   phoneCountryCode: DEFAULT_COUNTRY_CODE,
   phone: '',
+  whatsappSameAsMobile: true,
   whatsappCountryCode: DEFAULT_COUNTRY_CODE,
   whatsapp: '',
   email: '',
@@ -121,6 +124,21 @@ const emptyParent = (): FormValues['parents'][number] => ({
   aadharNumber: '',
   isPrimary: false,
 });
+
+/** Was the saved WhatsApp number identical to the mobile? (drives the checkbox). */
+function whatsappMirrors(
+  mobile?: string | null,
+  mobileCode?: string | null,
+  whatsapp?: string | null,
+  whatsappCode?: string | null,
+): boolean {
+  // No distinct WhatsApp on record → default the convenience checkbox on.
+  if (!whatsapp) return true;
+  return (
+    whatsapp === (mobile ?? '') &&
+    (whatsappCode ?? DEFAULT_COUNTRY_CODE) === (mobileCode ?? DEFAULT_COUNTRY_CODE)
+  );
+}
 
 export function StudentRegistrationPage() {
   const { id } = useParams<{ id: string }>();
@@ -185,6 +203,7 @@ export function StudentRegistrationPage() {
       aadharNumber: '',
       mobileCountryCode: DEFAULT_COUNTRY_CODE,
       mobile: '',
+      whatsappSameAsMobile: true,
       whatsappCountryCode: DEFAULT_COUNTRY_CODE,
       whatsapp: '',
       address: '',
@@ -226,6 +245,12 @@ export function StudentRegistrationPage() {
         aadharNumber: student.aadharNumber ?? '',
         mobileCountryCode: student.mobileCountryCode ?? DEFAULT_COUNTRY_CODE,
         mobile: student.mobile ?? '',
+        whatsappSameAsMobile: whatsappMirrors(
+          student.mobile,
+          student.mobileCountryCode,
+          student.whatsapp,
+          student.whatsappCountryCode,
+        ),
         whatsappCountryCode:
           student.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE,
         whatsapp: student.whatsapp ?? '',
@@ -247,6 +272,12 @@ export function StudentRegistrationPage() {
               name: p.name,
               phoneCountryCode: p.phoneCountryCode ?? DEFAULT_COUNTRY_CODE,
               phone: p.phone,
+              whatsappSameAsMobile: whatsappMirrors(
+                p.phone,
+                p.phoneCountryCode,
+                p.whatsapp,
+                p.whatsappCountryCode,
+              ),
               whatsappCountryCode:
                 p.whatsappCountryCode ?? DEFAULT_COUNTRY_CODE,
               whatsapp: p.whatsapp ?? '',
@@ -284,19 +315,25 @@ export function StudentRegistrationPage() {
     [allSections, watchedClass],
   );
 
-  const toParentPayload = (p: FormValues['parents'][number]) => ({
-    relation: p.relation,
-    name: p.name,
-    phoneCountryCode: p.phoneCountryCode || undefined,
-    phone: p.phone,
-    whatsappCountryCode: p.whatsapp ? p.whatsappCountryCode : undefined,
-    whatsapp: p.whatsapp || undefined,
-    email: p.email || undefined,
-    occupation: p.occupation || undefined,
-    annualIncome: p.annualIncome ? Number(p.annualIncome) : undefined,
-    aadharNumber: p.aadharNumber || undefined,
-    isPrimary: p.isPrimary,
-  });
+  const toParentPayload = (p: FormValues['parents'][number]) => {
+    const wa = p.whatsappSameAsMobile ? p.phone : p.whatsapp;
+    const waCode = p.whatsappSameAsMobile
+      ? p.phoneCountryCode
+      : p.whatsappCountryCode;
+    return {
+      relation: p.relation,
+      name: p.name,
+      phoneCountryCode: p.phoneCountryCode || undefined,
+      phone: p.phone,
+      whatsappCountryCode: wa ? waCode : undefined,
+      whatsapp: wa || undefined,
+      email: p.email || undefined,
+      occupation: p.occupation || undefined,
+      annualIncome: p.annualIncome ? Number(p.annualIncome) : undefined,
+      aadharNumber: p.aadharNumber || undefined,
+      isPrimary: p.isPrimary,
+    };
+  };
 
   const save = useMutation({
     mutationFn: async (v: FormValues) => {
@@ -312,8 +349,16 @@ export function StudentRegistrationPage() {
         aadharNumber: v.aadharNumber || undefined,
         mobileCountryCode: v.mobile ? v.mobileCountryCode : undefined,
         mobile: v.mobile || undefined,
-        whatsappCountryCode: v.whatsapp ? v.whatsappCountryCode : undefined,
-        whatsapp: v.whatsapp || undefined,
+        ...(() => {
+          const wa = v.whatsappSameAsMobile ? v.mobile : v.whatsapp;
+          const waCode = v.whatsappSameAsMobile
+            ? v.mobileCountryCode
+            : v.whatsappCountryCode;
+          return {
+            whatsappCountryCode: wa ? waCode : undefined,
+            whatsapp: wa || undefined,
+          };
+        })(),
         address: v.address || undefined,
         city: v.city || undefined,
         state: v.state || undefined,
@@ -446,11 +491,21 @@ export function StudentRegistrationPage() {
               />
             </Field>
             <Field label="WhatsApp">
-              <PhoneInputs
-                codeReg={register('whatsappCountryCode')}
-                numReg={register('whatsapp')}
-                placeholder="WhatsApp number"
-              />
+              <label className="mb-1.5 flex items-center gap-2 text-xs text-slate-600">
+                <input
+                  type="checkbox"
+                  className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                  {...register('whatsappSameAsMobile')}
+                />
+                Same as mobile
+              </label>
+              {!watch('whatsappSameAsMobile') && (
+                <PhoneInputs
+                  codeReg={register('whatsappCountryCode')}
+                  numReg={register('whatsapp')}
+                  placeholder="WhatsApp number"
+                />
+              )}
             </Field>
 
             <Field
@@ -602,11 +657,21 @@ export function StudentRegistrationPage() {
                     />
                   </Field>
                   <Field label="WhatsApp">
-                    <PhoneInputs
-                      codeReg={register(`parents.${i}.whatsappCountryCode`)}
-                      numReg={register(`parents.${i}.whatsapp`)}
-                      placeholder="WhatsApp"
-                    />
+                    <label className="mb-1.5 flex items-center gap-2 text-xs text-slate-600">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-brand-600"
+                        {...register(`parents.${i}.whatsappSameAsMobile`)}
+                      />
+                      Same as mobile
+                    </label>
+                    {!watch(`parents.${i}.whatsappSameAsMobile`) && (
+                      <PhoneInputs
+                        codeReg={register(`parents.${i}.whatsappCountryCode`)}
+                        numReg={register(`parents.${i}.whatsapp`)}
+                        placeholder="WhatsApp"
+                      />
+                    )}
                   </Field>
                   <Field
                     label="Email"
