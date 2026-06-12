@@ -50,6 +50,10 @@ const STAFF_EXPORT_COLUMNS: ExportColumn<StaffExportRow>[] = [
   { header: 'Designation', value: (r) => r.designation, width: 20 },
   { header: 'Department', value: (r) => r.department },
   { header: 'Qualification', value: (r) => r.qualification, width: 20 },
+  { header: 'Mobile Country Code', value: (r) => r.mobileCountryCode },
+  { header: 'Mobile', value: (r) => r.mobile },
+  { header: 'WhatsApp Country Code', value: (r) => r.whatsappCountryCode },
+  { header: 'WhatsApp', value: (r) => r.whatsapp },
   {
     header: 'Joining Date',
     value: (r) =>
