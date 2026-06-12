@@ -25,6 +25,12 @@ import { ParentsController } from './parents/parents.controller';
 import { ParentsService } from './parents/parents.service';
 import { ParentImportService } from './parents/parent-import.service';
 
+import { QualificationsController } from './student-profile/qualifications.controller';
+import { QualificationsService } from './student-profile/qualifications.service';
+import { DocumentsController } from './student-profile/documents.controller';
+import { DocumentsService } from './student-profile/documents.service';
+import { UploadsController } from './uploads/uploads.controller';
+
 import { AcademicsController } from './academics/academics.controller';
 import { AcademicsService } from './academics/academics.service';
 
@@ -80,6 +86,9 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
     SubjectsController,
     StudentsController,
     ParentsController,
+    QualificationsController,
+    DocumentsController,
+    UploadsController,
     AcademicsController,
     SettingsController,
     VisitorsController,
@@ -104,6 +113,8 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
     StudentImportService,
     ParentsService,
     ParentImportService,
+    QualificationsService,
+    DocumentsService,
     AcademicsService,
     SettingsService,
     VisitorsService,

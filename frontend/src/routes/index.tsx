@@ -6,6 +6,7 @@ import { LoginPage } from '@/pages/auth/LoginPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { StudentsPage } from '@/pages/students/StudentsPage';
 import { StudentRegistrationPage } from '@/pages/students/StudentRegistrationPage';
+import { StudentViewPage } from '@/pages/students/StudentViewPage';
 import { TransferCertificatesPage } from '@/pages/students/TransferCertificatesPage';
 import { ParentsPage } from '@/pages/parents/ParentsPage';
 import { PromotionPage } from '@/pages/academics/PromotionPage';
@@ -151,6 +152,7 @@ export function AppRoutes() {
           path="students/:id/edit"
           element={<StudentRegistrationPage />}
         />
+        <Route path="students/:id" element={<StudentViewPage />} />
         <Route
           path="transfer-certificates"
           element={<TransferCertificatesPage />}

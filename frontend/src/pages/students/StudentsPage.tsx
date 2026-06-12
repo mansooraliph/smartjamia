@@ -360,9 +360,13 @@ export function StudentsPage() {
             header: 'Name',
             render: (s) => (
               <div className="leading-tight">
-                <div className="font-medium text-slate-900">
+                <button
+                  className="font-medium text-slate-900 hover:text-brand-600 hover:underline"
+                  onClick={() => navigate(`/students/${s.id}`)}
+                  title="View profile"
+                >
                   {s.firstName} {s.lastName}
-                </div>
+                </button>
                 <div className="text-xs text-slate-500 capitalize">
                   {s.gender}
                 </div>

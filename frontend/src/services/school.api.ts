@@ -768,6 +768,96 @@ export const StudentsApi = {
   },
 };
 
+// ───── Uploads (images / PDFs) ───────────────────────────────────────────────
+export interface UploadResult {
+  url: string;
+  name: string;
+  size: number;
+  mime: string;
+}
+export const UploadApi = {
+  upload: async (file: File): Promise<UploadResult> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return unwrap(await api.post('/school/uploads', fd));
+  },
+};
+
+// ───── Student qualifications (prior education) ──────────────────────────────
+export interface StudentQualification {
+  id: string;
+  schoolId: string;
+  studentId: string;
+  examName: string;
+  board: string | null;
+  institution: string | null;
+  yearOfPassing: number | null;
+  percentage: string | null;
+  grade: string | null;
+  registerNumber: string | null;
+  fileUrl: string | null;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export const QualificationsApi = {
+  list: async (studentId: string): Promise<StudentQualification[]> =>
+    unwrap(
+      await api.get('/school/student-qualifications', {
+        params: { studentId },
+      }),
+    ),
+  create: async (data: Record<string, unknown>): Promise<StudentQualification> =>
+    unwrap(await api.post('/school/student-qualifications', data)),
+  update: async (
+    id: string,
+    data: Record<string, unknown>,
+  ): Promise<StudentQualification> =>
+    unwrap(await api.patch(`/school/student-qualifications/${id}`, data)),
+  remove: async (id: string) =>
+    unwrap(await api.delete(`/school/student-qualifications/${id}`)),
+};
+
+// ───── Student documents (proofs / certificates) ────────────────────────────
+export type StudentDocumentType =
+  | 'aadhaar'
+  | 'birth_certificate'
+  | 'transfer_certificate'
+  | 'marksheet'
+  | 'id_proof'
+  | 'address_proof'
+  | 'caste_certificate'
+  | 'income_certificate'
+  | 'photo'
+  | 'other';
+export interface StudentDocument {
+  id: string;
+  schoolId: string;
+  studentId: string;
+  type: StudentDocumentType;
+  title: string;
+  fileUrl: string;
+  fileName: string | null;
+  note: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export const DocumentsApi = {
+  list: async (studentId: string): Promise<StudentDocument[]> =>
+    unwrap(
+      await api.get('/school/student-documents', { params: { studentId } }),
+    ),
+  create: async (data: Record<string, unknown>): Promise<StudentDocument> =>
+    unwrap(await api.post('/school/student-documents', data)),
+  update: async (
+    id: string,
+    data: Record<string, unknown>,
+  ): Promise<StudentDocument> =>
+    unwrap(await api.patch(`/school/student-documents/${id}`, data)),
+  remove: async (id: string) =>
+    unwrap(await api.delete(`/school/student-documents/${id}`)),
+};
+
 // ───── Academics: bulk-enroll & promotion ───────────────────────────────────
 export interface ImportRowResult {
   rowNumber: number;

@@ -17,6 +17,8 @@ import { Section } from './tenant/section.entity';
 import { Subject } from './tenant/subject.entity';
 import { Student } from './tenant/student.entity';
 import { Parent } from './tenant/parent.entity';
+import { StudentQualification } from './tenant/student-qualification.entity';
+import { StudentDocument } from './tenant/student-document.entity';
 import { StudentEnrollment } from './tenant/student-enrollment.entity';
 import { Attendance } from './tenant/attendance.entity';
 import { Exam } from './tenant/exam.entity';
@@ -56,6 +58,8 @@ export const TENANT_ENTITIES = [
   Subject,
   Student,
   Parent,
+  StudentQualification,
+  StudentDocument,
   StudentEnrollment,
   Attendance,
   Exam,
