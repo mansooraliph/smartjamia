@@ -37,8 +37,10 @@ Desktop.ini
 coverage/
 .nyc_output
 
-# Uploads
-uploads/
+# Uploads (runtime file storage only — NOT the source module of the same name)
+/uploads/
+backend/uploads/
+!backend/src/modules/tenant/uploads/
 
 # TypeScript build info
 *.tsbuildinfo
