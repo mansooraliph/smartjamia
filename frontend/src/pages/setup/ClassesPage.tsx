@@ -175,13 +175,12 @@ export function ClassesPage() {
 
   const renderClassCard = (cls: ClassEntity) => (
     <div key={cls.id} className="card overflow-hidden">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3">
+        <div className="flex items-center gap-2">
           <h3 className="font-semibold text-slate-900">{cls.name}</h3>
           <Badge tone="slate">
             {cls.sections?.length ?? 0} {term.groupPlural.toLowerCase()}
           </Badge>
-          <span className="text-xs text-slate-500">order #{cls.orderIndex}</span>
         </div>
         <div className="flex items-center gap-1">
           <button
@@ -435,7 +434,9 @@ export function ClassesPage() {
                       · {group.length} {term.levelPlural.toLowerCase()}
                     </span>
                   </div>
-                  <div className="space-y-4">{group.map(renderClassCard)}</div>
+                  <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {group.map(renderClassCard)}
+                  </div>
                 </section>
               );
             })}
@@ -455,13 +456,17 @@ export function ClassesPage() {
                     · {ungrouped.length} {term.levelPlural.toLowerCase()}
                   </span>
                 </div>
-                <div className="space-y-4">{ungrouped.map(renderClassCard)}</div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {ungrouped.map(renderClassCard)}
+                </div>
               </section>
             );
           })()}
         </div>
       ) : (
-        <div className="space-y-4">{classes.map(renderClassCard)}</div>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {classes.map(renderClassCard)}
+        </div>
       )}
 
       <ClassFormModal
