@@ -173,6 +173,93 @@ export function ClassesPage() {
     },
   });
 
+  const renderClassCard = (cls: ClassEntity) => (
+    <div key={cls.id} className="card overflow-hidden">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
+        <div className="flex items-center gap-3">
+          <h3 className="font-semibold text-slate-900">{cls.name}</h3>
+          <Badge tone="slate">
+            {cls.sections?.length ?? 0} {term.groupPlural.toLowerCase()}
+          </Badge>
+          <span className="text-xs text-slate-500">order #{cls.orderIndex}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            className="btn bg-slate-200 px-2.5 py-1 text-xs hover:bg-slate-300"
+            onClick={() => setSectionModal({ open: true, classId: cls.id })}
+          >
+            <Plus className="mr-1 h-3 w-3" /> Add {term.group.toLowerCase()}
+          </button>
+          <button
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-200 hover:text-brand-700"
+            onClick={() => setClassModal({ open: true, cls })}
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
+            onClick={() => setClassConfirm({ open: true, cls })}
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="divide-y divide-slate-100">
+        {cls.sections && cls.sections.length > 0 ? (
+          cls.sections.map((sec) => (
+            <div
+              key={sec.id}
+              className="flex items-center justify-between px-5 py-3 hover:bg-slate-50"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-50 text-sm font-semibold text-brand-700">
+                  {sec.name}
+                </div>
+                <div>
+                  <div className="text-sm font-medium text-slate-900">
+                    {term.group} {sec.name}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-slate-500">
+                    <Users className="h-3 w-3" /> capacity {sec.capacity}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-600"
+                  onClick={() =>
+                    setSectionModal({
+                      open: true,
+                      classId: cls.id,
+                      section: sec,
+                    })
+                  }
+                  title="Edit"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                  onClick={() => setSectionConfirm({ open: true, section: sec })}
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="px-5 py-6 text-center text-sm text-slate-400">
+            No {term.groupPlural.toLowerCase()} — add one with the button above.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   if (years.length === 0) {
     return (
       <>
@@ -322,103 +409,59 @@ export function ClassesPage() {
         <div className="card p-8 text-center text-slate-400">
           No {term.levelPlural.toLowerCase()} yet for this academic year.
         </div>
-      ) : (
-        <div className="space-y-4">
-          {classes.map((cls) => (
-            <div key={cls.id} className="card overflow-hidden">
-              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-5 py-3">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-semibold text-slate-900">{cls.name}</h3>
-                  <Badge tone="slate">
-                    {cls.sections?.length ?? 0}{' '}
-                    {term.groupPlural.toLowerCase()}
-                  </Badge>
-                  <span className="text-xs text-slate-500">
-                    order #{cls.orderIndex}
+      ) : isCollege && courses.length > 0 ? (
+        <div className="space-y-6">
+          {courses
+            .filter((course) =>
+              classes.some((cls) => cls.courseId === course.id),
+            )
+            .map((course) => {
+              const group = classes
+                .filter((cls) => cls.courseId === course.id)
+                .sort((a, b) => a.orderIndex - b.orderIndex);
+              return (
+                <section key={course.id}>
+                  <div className="mb-2 flex items-center gap-2 px-1">
+                    <Layers className="h-4 w-4 text-brand-600" />
+                    <h2 className="text-sm font-semibold text-slate-900">
+                      {course.name}
+                    </h2>
+                    {course.code && (
+                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                        {course.code}
+                      </span>
+                    )}
+                    <span className="text-xs text-slate-400">
+                      · {group.length} {term.levelPlural.toLowerCase()}
+                    </span>
+                  </div>
+                  <div className="space-y-4">{group.map(renderClassCard)}</div>
+                </section>
+              );
+            })}
+
+          {(() => {
+            const ungrouped = classes
+              .filter((cls) => !cls.courseId)
+              .sort((a, b) => a.orderIndex - b.orderIndex);
+            if (ungrouped.length === 0) return null;
+            return (
+              <section>
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <h2 className="text-sm font-semibold text-slate-500">
+                    Not assigned to a course
+                  </h2>
+                  <span className="text-xs text-slate-400">
+                    · {ungrouped.length} {term.levelPlural.toLowerCase()}
                   </span>
                 </div>
-                <div className="flex items-center gap-1">
-                  <button
-                    className="btn bg-slate-200 px-2.5 py-1 text-xs hover:bg-slate-300"
-                    onClick={() =>
-                      setSectionModal({ open: true, classId: cls.id })
-                    }
-                  >
-                    <Plus className="mr-1 h-3 w-3" /> Add {term.group.toLowerCase()}
-                  </button>
-                  <button
-                    className="rounded-md p-1.5 text-slate-500 hover:bg-slate-200 hover:text-brand-700"
-                    onClick={() => setClassModal({ open: true, cls })}
-                    title="Edit"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                  <button
-                    className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                    onClick={() => setClassConfirm({ open: true, cls })}
-                    title="Delete"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="divide-y divide-slate-100">
-                {cls.sections && cls.sections.length > 0 ? (
-                  cls.sections.map((sec) => (
-                    <div
-                      key={sec.id}
-                      className="flex items-center justify-between px-5 py-3 hover:bg-slate-50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-50 text-sm font-semibold text-brand-700">
-                          {sec.name}
-                        </div>
-                        <div>
-                          <div className="text-sm font-medium text-slate-900">
-                            {term.group} {sec.name}
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-slate-500">
-                            <Users className="h-3 w-3" /> capacity {sec.capacity}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button
-                          className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-600"
-                          onClick={() =>
-                            setSectionModal({
-                              open: true,
-                              classId: cls.id,
-                              section: sec,
-                            })
-                          }
-                          title="Edit"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                        <button
-                          className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                          onClick={() =>
-                            setSectionConfirm({ open: true, section: sec })
-                          }
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="px-5 py-6 text-center text-sm text-slate-400">
-                    No {term.groupPlural.toLowerCase()} — add one with the
-                    button above.
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
+                <div className="space-y-4">{ungrouped.map(renderClassCard)}</div>
+              </section>
+            );
+          })()}
         </div>
+      ) : (
+        <div className="space-y-4">{classes.map(renderClassCard)}</div>
       )}
 
       <ClassFormModal
