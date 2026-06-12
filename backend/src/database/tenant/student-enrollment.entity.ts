@@ -34,8 +34,10 @@ export class StudentEnrollment {
   @Column({ type: 'uuid', name: 'class_id' })
   classId: string;
 
-  @Column({ type: 'uuid', name: 'section_id' })
-  sectionId: string;
+  // Optional: classes that aren't divided into groups (e.g. college semesters)
+  // enroll students directly into the class with no section.
+  @Column({ type: 'uuid', name: 'section_id', nullable: true })
+  sectionId: string | null;
 
   @Column({ type: 'varchar', length: 20, name: 'roll_number', nullable: true })
   rollNumber: string | null;

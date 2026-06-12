@@ -70,6 +70,8 @@ const schema = z
     rollNumber: z.string().optional().or(z.literal('')),
   })
   .superRefine((v, ctx) => {
+    // Section is optional; year + class are required once any enrollment field
+    // is touched. (A section without a class makes no sense, so flag that too.)
     const any = v.academicYearId || v.classId || v.sectionId;
     if (!any) return;
     if (!v.academicYearId)
@@ -81,12 +83,6 @@ const schema = z
     if (!v.classId)
       ctx.addIssue({
         path: ['classId'],
-        code: z.ZodIssueCode.custom,
-        message: 'Required for enrollment',
-      });
-    if (!v.sectionId)
-      ctx.addIssue({
-        path: ['sectionId'],
         code: z.ZodIssueCode.custom,
         message: 'Required for enrollment',
       });
@@ -510,10 +506,11 @@ export function StudentsPage() {
             status: v.status,
           };
           // Enrollment works for both new admissions and edits (move class/section).
-          if (v.academicYearId && v.classId && v.sectionId) {
+          // Section is optional — a class with no groups enrolls directly.
+          if (v.academicYearId && v.classId) {
             payload.academicYearId = v.academicYearId;
             payload.classId = v.classId;
-            payload.sectionId = v.sectionId;
+            payload.sectionId = v.sectionId || undefined;
             payload.rollNumber = v.rollNumber || undefined;
           }
           upsert.mutate({ id: modal.student?.id, payload });
@@ -784,7 +781,11 @@ function StudentFormModal({
             ))}
           </Select>
         </Field>
-        <Field label={term.group} error={errors.sectionId?.message}>
+        <Field
+          label={term.group}
+          hint="Optional"
+          error={errors.sectionId?.message}
+        >
           <Select {...register('sectionId')} disabled={!watchedClass}>
             <option value="">— None —</option>
             {filteredSections.map((s) => (

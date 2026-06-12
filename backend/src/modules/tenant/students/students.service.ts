@@ -139,7 +139,10 @@ export class StudentsService {
         gender: s.gender,
         dateOfBirth: s.dateOfBirth,
         className: s.enrollment ? cMap.get(s.enrollment.classId) ?? '' : '',
-        sectionName: s.enrollment ? sMap.get(s.enrollment.sectionId) ?? '' : '',
+        sectionName:
+          s.enrollment?.sectionId != null
+            ? sMap.get(s.enrollment.sectionId) ?? ''
+            : '',
         rollNumber: s.enrollment?.rollNumber ?? '',
         status: s.status,
         admissionDate: s.admissionDate,
@@ -352,23 +355,27 @@ export class StudentsService {
   ) {
     const hasAny = dto.academicYearId || dto.classId || dto.sectionId;
     if (!hasAny) return;
-    if (!dto.academicYearId || !dto.classId || !dto.sectionId) {
+    // Year + class are required to enroll; section is optional (classes that
+    // aren't split into groups enroll students directly into the class).
+    if (!dto.academicYearId || !dto.classId) {
       throw new BadRequestException(
-        'academicYearId, classId, and sectionId must all be provided to enroll',
+        'academicYearId and classId are required to enroll',
       );
     }
     const ay = await em
       .getRepository(AcademicYear)
       .findOne({ where: { id: dto.academicYearId, schoolId } });
     if (!ay) throw new NotFoundException('Academic year not found');
-    const sec = await em
-      .getRepository(Section)
-      .findOne({ where: { id: dto.sectionId, schoolId } });
-    if (!sec) throw new NotFoundException('Section not found');
-    if (sec.classId !== dto.classId) {
-      throw new BadRequestException(
-        'Section does not belong to the given class',
-      );
+    if (dto.sectionId) {
+      const sec = await em
+        .getRepository(Section)
+        .findOne({ where: { id: dto.sectionId, schoolId } });
+      if (!sec) throw new NotFoundException('Section not found');
+      if (sec.classId !== dto.classId) {
+        throw new BadRequestException(
+          'Section does not belong to the given class',
+        );
+      }
     }
 
     const enrolRepo = em.getRepository(StudentEnrollment);
@@ -377,7 +384,7 @@ export class StudentsService {
     });
     if (existing) {
       existing.classId = dto.classId;
-      existing.sectionId = dto.sectionId;
+      existing.sectionId = dto.sectionId ?? null;
       if (dto.rollNumber !== undefined) {
         existing.rollNumber = dto.rollNumber ?? null;
       }
@@ -390,7 +397,7 @@ export class StudentsService {
         studentId,
         academicYearId: dto.academicYearId,
         classId: dto.classId,
-        sectionId: dto.sectionId,
+        sectionId: dto.sectionId ?? null,
         rollNumber: dto.rollNumber ?? null,
         enrollmentDate: fallbackDate,
         status: 'active' as any,

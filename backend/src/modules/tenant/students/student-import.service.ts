@@ -161,17 +161,17 @@ export class StudentImportService {
 
         if (row.willEnroll && academicYearId) {
           const classId = classMap.get(d.className.toLowerCase());
-          const section = sectionMap.get(
-            `${classId}|${d.sectionName.toLowerCase()}`,
-          );
-          if (classId && section) {
+          const section = d.sectionName
+            ? sectionMap.get(`${classId}|${d.sectionName.toLowerCase()}`)
+            : undefined;
+          if (classId) {
             await enrolRepo.save(
               enrolRepo.create({
                 schoolId,
                 studentId: student.id,
                 academicYearId,
                 classId,
-                sectionId: section,
+                sectionId: section ?? null,
                 rollNumber: d.rollNumber || null,
                 enrollmentDate: student.admissionDate,
                 status: 'active' as any,
@@ -315,20 +315,23 @@ export class StudentImportService {
         seenInFile.add(d.admissionNumber);
       }
 
-      // Enrollment columns (optional, but if class given both must resolve)
+      // Enrollment columns: class is required to enroll; section is optional.
       let willEnroll = false;
       if (d.className || d.sectionName) {
         if (!academicYearId) {
           errors.push(
             'Select an academic year to enroll students by class/section',
           );
-        } else if (!d.className || !d.sectionName) {
-          errors.push('Both class and section are required to enroll');
+        } else if (!d.className) {
+          errors.push('A class is required to enroll (section is optional)');
         } else {
           const classId = classMap.get(d.className.toLowerCase());
           if (!classId) {
             errors.push(`Class "${d.className}" not found in the selected year`);
-          } else if (!sectionMap.has(`${classId}|${d.sectionName.toLowerCase()}`)) {
+          } else if (
+            d.sectionName &&
+            !sectionMap.has(`${classId}|${d.sectionName.toLowerCase()}`)
+          ) {
             errors.push(
               `Section "${d.sectionName}" not found in class "${d.className}"`,
             );

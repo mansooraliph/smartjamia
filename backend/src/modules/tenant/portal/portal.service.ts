@@ -391,11 +391,13 @@ export class PortalService {
       const cls = await em
         .getRepository(ClassEntity)
         .findOne({ where: { id: enrollment.classId, schoolId } });
-      const sec = await em
-        .getRepository(Section)
-        .findOne({ where: { id: enrollment.sectionId, schoolId } });
       className = cls?.name ?? null;
-      sectionName = sec?.name ?? null;
+      if (enrollment.sectionId) {
+        const sec = await em
+          .getRepository(Section)
+          .findOne({ where: { id: enrollment.sectionId, schoolId } });
+        sectionName = sec?.name ?? null;
+      }
     }
     return {
       id: student.id,

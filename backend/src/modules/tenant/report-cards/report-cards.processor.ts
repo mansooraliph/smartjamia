@@ -84,7 +84,7 @@ export class ReportCardsProcessor {
             .getRepository(ClassEntity)
             .findOne({ where: { id: enrollment.classId, schoolId } })
         : null;
-      const section = enrollment
+      const section = enrollment?.sectionId
         ? await em
             .getRepository(Section)
             .findOne({ where: { id: enrollment.sectionId, schoolId } })
