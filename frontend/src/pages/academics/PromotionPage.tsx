@@ -5,6 +5,7 @@ import {
   AcademicsApi,
   AcademicYearsApi,
   ClassesApi,
+  classLabel,
   PromotionAction,
 } from '@/services/school.api';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -224,7 +225,7 @@ export function PromotionPage() {
                     : 'border-slate-200 hover:bg-slate-50'
                 }`}
               >
-                {c.name}{' '}
+                {classLabel(c)}{' '}
                 <Badge tone="slate" className="ml-1">
                   {c.activeStudents}
                 </Badge>
@@ -259,7 +260,7 @@ export function PromotionPage() {
                 <option value="">— Select —</option>
                 {toClasses.map((c) => (
                   <option key={c.id} value={c.id}>
-                    {c.name}
+                    {classLabel(c)}
                   </option>
                 ))}
               </Select>

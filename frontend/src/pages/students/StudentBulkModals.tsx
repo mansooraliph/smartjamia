@@ -4,6 +4,7 @@ import { Download, Upload, Loader2 } from 'lucide-react';
 import {
   AcademicsApi,
   ClassesApi,
+  classLabel,
   ImportCommitResult,
   ImportPreview,
   SectionsApi,
@@ -348,7 +349,7 @@ export function BulkAssignModal({
             }}
             options={[
               { value: '', label: '— Select —' },
-              ...classes.map((c) => ({ value: c.id, label: c.name })),
+              ...classes.map((c) => ({ value: c.id, label: classLabel(c) })),
             ]}
           />
           <LabeledSelect

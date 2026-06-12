@@ -8,6 +8,7 @@ import {
   AcademicYearsApi,
   ClassEntity,
   ClassesApi,
+  classLabel,
   Course,
   CourseLevel,
   CoursesApi,
@@ -746,7 +747,7 @@ function SectionFormModal({
           <Select {...register('classId')} disabled={!!section}>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {classLabel(c)}
               </option>
             ))}
           </Select>

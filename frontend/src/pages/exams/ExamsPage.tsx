@@ -16,6 +16,7 @@ import {
 import {
   AcademicYearsApi,
   ClassesApi,
+  classLabel,
   ExamsApi,
   ExamStatus,
   ExamType,
@@ -104,7 +105,7 @@ function ExamsList({ onOpen }: { onOpen: (id: string) => void }) {
   });
 
   const classNameById = useMemo(
-    () => new Map(classes.map((c) => [c.id, c.name])),
+    () => new Map(classes.map((c) => [c.id, classLabel(c)])),
     [classes],
   );
 
@@ -149,7 +150,7 @@ function ExamsList({ onOpen }: { onOpen: (id: string) => void }) {
           <option value="">All {term.levelPlural.toLowerCase()}</option>
           {classes.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {classLabel(c)}
             </option>
           ))}
         </Select>
@@ -296,7 +297,7 @@ function CreateExamModal({
               <option value="">Select…</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {classLabel(c)}
                 </option>
               ))}
             </Select>

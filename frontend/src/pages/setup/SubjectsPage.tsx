@@ -7,6 +7,7 @@ import { Plus, Pencil, Trash2, Upload } from 'lucide-react';
 import {
   AcademicYearsApi,
   ClassesApi,
+  classLabel,
   ExportFormat,
   Subject,
   SubjectsApi,
@@ -88,7 +89,7 @@ export function SubjectsPage() {
   });
 
   const classNameById = useMemo(
-    () => Object.fromEntries(classes.map((c) => [c.id, c.name])),
+    () => Object.fromEntries(classes.map((c) => [c.id, classLabel(c)])),
     [classes],
   );
 
@@ -118,7 +119,7 @@ export function SubjectsPage() {
               <option value="">All {term.levelPlural.toLowerCase()}</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
-                  {c.name}
+                  {classLabel(c)}
                 </option>
               ))}
             </Select>
@@ -326,7 +327,7 @@ function SubjectFormModal({
           <Select {...register('classId')} disabled={!!subject}>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {classLabel(c)}
               </option>
             ))}
           </Select>

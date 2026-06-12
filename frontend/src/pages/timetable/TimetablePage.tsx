@@ -4,6 +4,7 @@ import { Copy, Plus, Printer, Save, Trash2, Wand2 } from 'lucide-react';
 import {
   AcademicYearsApi,
   ClassesApi,
+  classLabel,
   DayOfWeek,
   SectionsApi,
   TeacherSchedule,
@@ -224,7 +225,7 @@ function TimetableEditor() {
         >
           <option value="">Select {term.level.toLowerCase()}</option>
           {classes.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
+            <option key={c.id} value={c.id}>{classLabel(c)}</option>
           ))}
         </Select>
         <Select

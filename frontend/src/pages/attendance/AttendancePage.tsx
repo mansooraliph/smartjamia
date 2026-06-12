@@ -14,6 +14,7 @@ import {
   AttendanceApi,
   AttendanceStatus,
   ClassesApi,
+  classLabel,
   SectionAttendanceRow,
   SectionsApi,
 } from '@/services/school.api';
@@ -200,7 +201,7 @@ export function AttendancePage() {
           <option value="">Select {term.level.toLowerCase()}</option>
           {classes.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {classLabel(c)}
             </option>
           ))}
         </Select>

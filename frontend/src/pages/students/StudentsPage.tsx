@@ -24,6 +24,7 @@ import {
 import {
   AcademicYearsApi,
   ClassesApi,
+  classLabel,
   ExportFormat,
   SectionsApi,
   Student,
@@ -226,7 +227,7 @@ export function StudentsPage() {
   });
 
   const classMap = useMemo(
-    () => Object.fromEntries(classes.map((c) => [c.id, c.name])),
+    () => Object.fromEntries(classes.map((c) => [c.id, classLabel(c)])),
     [classes],
   );
   const sectionMap = useMemo(
@@ -320,7 +321,7 @@ export function StudentsPage() {
           <option value="">All {term.levelPlural.toLowerCase()}</option>
           {classes.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {classLabel(c)}
             </option>
           ))}
         </Select>
@@ -776,7 +777,7 @@ function StudentFormModal({
             <option value="">— None —</option>
             {yearClasses.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {classLabel(c)}
               </option>
             ))}
           </Select>

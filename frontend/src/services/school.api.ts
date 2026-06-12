@@ -789,6 +789,7 @@ export interface ImportCommitResult {
 export interface PromotionSourceClass {
   id: string;
   name: string;
+  courseName?: string | null;
   orderIndex: number;
   activeStudents: number;
 }
