@@ -47,13 +47,18 @@ type ParentExportRow = Awaited<
 >[number];
 
 const PARENT_EXPORT_COLUMNS: ExportColumn<ParentExportRow>[] = [
+  { header: 'Admission #', value: (r) => r.admissionNumber, width: 16 },
+  { header: 'Student', value: (r) => r.student, width: 22 },
   { header: 'Name', value: (r) => r.name, width: 22 },
   { header: 'Relation', value: (r) => r.relation },
-  { header: 'Student', value: (r) => r.student, width: 22 },
-  { header: 'Admission #', value: (r) => r.admissionNumber, width: 16 },
+  { header: 'Phone Country Code', value: (r) => r.phoneCountryCode },
   { header: 'Phone', value: (r) => r.phone, width: 16 },
+  { header: 'WhatsApp Country Code', value: (r) => r.whatsappCountryCode },
+  { header: 'WhatsApp', value: (r) => r.whatsapp, width: 16 },
   { header: 'Email', value: (r) => r.email, width: 24 },
   { header: 'Occupation', value: (r) => r.occupation },
+  { header: 'Annual Income', value: (r) => String(r.annualIncome ?? '') },
+  { header: 'Aadhaar', value: (r) => r.aadharNumber },
   { header: 'Primary', value: (r) => r.isPrimary },
 ];
 

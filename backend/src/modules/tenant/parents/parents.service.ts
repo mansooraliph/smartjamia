@@ -104,15 +104,20 @@ export class ParentsService {
         .getMany();
       const withStudents = await this.attachStudents(em, schoolId, parents);
       return withStudents.map((p) => ({
-        name: p.name,
-        relation: p.relation,
+        admissionNumber: p.student?.admissionNumber ?? '',
         student: p.student
           ? `${p.student.firstName} ${p.student.lastName}`
           : '',
-        admissionNumber: p.student?.admissionNumber ?? '',
+        name: p.name,
+        relation: p.relation,
+        phoneCountryCode: p.phoneCountryCode ?? '',
         phone: p.phone,
+        whatsappCountryCode: p.whatsappCountryCode ?? '',
+        whatsapp: p.whatsapp ?? '',
         email: p.email ?? '',
         occupation: p.occupation ?? '',
+        annualIncome: p.annualIncome ?? '',
+        aadharNumber: p.aadharNumber ?? '',
         isPrimary: p.isPrimary ? 'Yes' : 'No',
       }));
     });
