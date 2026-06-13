@@ -403,3 +403,31 @@ export const TENANT_HEADER = 'x-school-slug';
 
 export const SHARED_POOL_SCHEMA = 'shared_pool';
 export const RUPEE_TO_PAISE = 100;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BIOMETRIC DEVICES
+// ─────────────────────────────────────────────────────────────────────────────
+
+export enum BiometricDeviceStatus {
+  ONLINE = '1',
+  OFFLINE = '0',
+}
+
+export enum BiometricCommandStatus {
+  PENDING = 0,
+  SUCCESS = 1,
+  ERROR = 2,
+}
+
+export enum BiometricEnrollmentType {
+  FP = 'FP', // Fingerprint
+  FACE = 'FACE', // Face
+  PALM = 'PALM', // Palm
+  USERPIC = 'USERPIC', // User picture
+  BIOPHOTO = 'BIOPHOTO', // Bio photo
+}
+
+export enum PunchState {
+  CHECK_IN = 0,
+  CHECK_OUT = 1,
+}

@@ -13,6 +13,9 @@ import { PlatformInvoice } from './master/platform-invoice.entity';
 import { Superadmin } from './master/superadmin.entity';
 import { SchemaMigrationLog } from './master/schema-migration-log.entity';
 import { Branch } from './master/branch.entity';
+import { BiometricDevice } from './master/biometric-device.entity';
+import { BiometricDeviceCommand } from './master/biometric-device-command.entity';
+import { BiometricDeviceLog } from './master/biometric-device-log.entity';
 
 export const masterDataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -30,6 +33,9 @@ export const masterDataSourceOptions: DataSourceOptions = {
     Superadmin,
     SchemaMigrationLog,
     Branch,
+    BiometricDevice,
+    BiometricDeviceCommand,
+    BiometricDeviceLog,
   ],
   migrations: [join(__dirname, 'migrations', 'master', '*.{ts,js}')],
   synchronize: false,

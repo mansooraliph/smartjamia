@@ -22,6 +22,9 @@ import { PublicModule } from './modules/public/public.module';
 import { BillingModule } from './modules/tenant/billing/billing.module';
 import { SuperadminModule } from './modules/superadmin/superadmin.module';
 import { SchoolModule } from './modules/tenant/school.module';
+import { BiometricModule } from './modules/biometric/biometric.module';
+import { BiometricDevicesAdminModule } from './modules/superadmin/biometric-devices/biometric-devices-admin.module';
+import { BiometricDevicesTenantModule } from './modules/tenant/biometric-devices/biometric-devices.module';
 
 @Module({
   imports: [
@@ -86,12 +89,19 @@ import { SchoolModule } from './modules/tenant/school.module';
     BillingModule,
     SuperadminModule,
     SchoolModule,
+    BiometricModule,
+    BiometricDevicesAdminModule,
+    BiometricDevicesTenantModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(TenantMiddleware).forRoutes('*');
+    // Device push-protocol routes carry no X-School-Slug — skip tenant resolution.
+    consumer
+      .apply(TenantMiddleware)
+      .exclude('iclock/(.*)')
+      .forRoutes('*');
   }
 }

@@ -1,0 +1,56 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { Transform } from 'class-transformer';
+import {
+  IsDateString,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
+import { PaginationDto } from '../../../../common/dto/pagination.dto';
+
+export class ListTransactionsQueryDto extends PaginationDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  to?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  studentId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  staffId?: string;
+
+  @ApiPropertyOptional({ description: '0 = check-in, 1 = check-out' })
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
+  @IsInt()
+  punchState?: number;
+}
+
+export class ListEnrollmentsQueryDto extends PaginationDto {
+  @ApiPropertyOptional({ enum: ['FP', 'FACE', 'PALM', 'USERPIC', 'BIOPHOTO'] })
+  @IsOptional()
+  @IsIn(['FP', 'FACE', 'PALM', 'USERPIC', 'BIOPHOTO'])
+  type?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  userCode?: string;
+}
+
+export class UpdateAliasDto {
+  @IsString()
+  alias: string;
+}

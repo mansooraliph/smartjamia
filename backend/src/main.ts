@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe, Logger } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { raw } from 'express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
@@ -15,6 +16,11 @@ async function bootstrap() {
     rawBody: true, // needed for Razorpay webhook signature verification
   });
 
+  // Biometric devices POST arbitrary content-types (often text/plain or
+  // octet-stream) that the default body parsers skip — capture the raw buffer
+  // for all /iclock routes so the push-protocol handlers can read it.
+  app.use('/iclock', raw({ type: () => true, limit: '10mb' }));
+
   const config = app.get(ConfigService);
   const port = Number(config.get<number>('APP_PORT', 3002)) || 3002;
   const frontendUrl = config.get<string>('FRONTEND_URL', 'http://localhost:5175');
@@ -23,7 +29,9 @@ async function bootstrap() {
   const storage = app.get(StorageService);
   app.useStaticAssets(storage.baseDir, { prefix: '/uploads/' });
 
-  app.setGlobalPrefix('api/v1');
+  // Biometric device push-protocol routes live at the server root (devices call
+  // /iclock/... directly), so exclude them from the /api/v1 prefix.
+  app.setGlobalPrefix('api/v1', { exclude: ['iclock/(.*)'] });
 
   app.useGlobalPipes(
     new ValidationPipe({

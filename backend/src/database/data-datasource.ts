@@ -47,6 +47,8 @@ import { InventoryItem } from './tenant/inventory-item.entity';
 import { UserInvitation } from './tenant/user-invitation.entity';
 import { Visitor } from './tenant/visitor.entity';
 import { Visit } from './tenant/visit.entity';
+import { BiometricTransaction } from './tenant/biometric-transaction.entity';
+import { BiometricEnrollment } from './tenant/biometric-enrollment.entity';
 
 export const TENANT_ENTITIES = [
   User,
@@ -89,6 +91,8 @@ export const TENANT_ENTITIES = [
   UserInvitation,
   Visitor,
   Visit,
+  BiometricTransaction,
+  BiometricEnrollment,
 ];
 
 export const dataDataSourceOptions: DataSourceOptions = {
