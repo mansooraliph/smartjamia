@@ -5,7 +5,7 @@
 > run and deploy it. For the original product spec see [`CLAUDE.md`](./CLAUDE.md); this
 > document reflects what is actually implemented.
 
-_Last updated: 2026-06-13_
+_Last updated: 2026-06-14_
 
 ---
 
@@ -163,6 +163,9 @@ System roles: `owner, admin, manager, teacher, staff, cashier`.
 | `platform_invoices` | Invoices raised to schools (EDU-INV-…) |
 | `superadmins` | EduPro operators (superadmin/support/finance) |
 | `schema_migration_log` | Records per-schema provisioning/migration runs |
+| `biometric_devices` | Globally-unique-SN terminals; assigned to one school at a time (see §10) |
+| `biometric_device_commands` | Commands queued for a device (polled by hardware) |
+| `biometric_device_logs` | Raw device↔server traffic audit (purgeable) |
 
 ### 6.2 Tenant DB (`edupro_data`, per schema)
 
@@ -199,6 +202,8 @@ Every tenant table carries a denormalized `school_id`. Registered in
 - `library_books`, `book_issues`
 - `transport_routes`, `hostel_rooms`, `hostel_allocations`, `inventory_items`
 - `visitors`, `visits` — front-office gate pass
+- `biometric_transactions` — device attendance punches (resolved to student/staff, deduped)
+- `biometric_enrollments` — FP/FACE/PALM/photo templates
 - `user_invitations`
 
 ---
@@ -227,6 +232,8 @@ Each is a NestJS module (controller = thin, service = logic, all guarded). Highl
 - **roles** — custom RBAC roles.
 - **portal** — parent/student read views.
 - **stats** — dashboard counters.
+- **biometric-devices** — premium device integration (push protocol, superadmin
+  device pool, school device view + live attendance). Full detail in §10.
 - **superadmin** (platform side) — manage schools, plans, school admins/passwords.
 
 ---
@@ -248,7 +255,74 @@ attendance summaries). PDFs are generated in background jobs, never blocking HTT
 
 ---
 
-## 10. Conventions
+## 10. Biometric device integration (premium)
+
+Integrates push-protocol fingerprint/face/palm terminals (**ZKTeco "iclock"** and
+**ESSL** — same protocol, ESSL just appends `.aspx` to each route). Gated behind the
+`biometric_devices` plan feature (Professional + Enterprise).
+
+### 10.1 Why devices live in master
+
+A terminal registers **globally by serial number** the first time it contacts the
+server — before anyone has assigned it to a school. So devices and their command queue
+live in the **master DB**; only the resulting attendance punches and biometric templates
+live in the **tenant schema**.
+
+| Table | DB | Role |
+|-------|----|----|
+| `biometric_devices` | master | device record; `school_id` NULL until assigned; `is_approved`, `state`, counts |
+| `biometric_device_commands` | master | queued commands; `(sn, status)` indexed for fast polling |
+| `biometric_device_logs` | master | fire-and-forget traffic audit (purgeable) |
+| `biometric_transactions` | tenant | punches (unique per `sn+time+user`), resolved to student/staff |
+| `biometric_enrollments` | tenant | FP/FACE/PALM/photo templates (unique per user+type+index) |
+
+### 10.2 Device push protocol (public, no auth)
+
+`IclockController` + `IclockService` (`modules/biometric/`). These routes are **plain-text**
+(devices reject JSON), **bypass the `/api/v1` prefix** (`setGlobalPrefix` exclude) and
+**TenantMiddleware** (middleware exclude), and read the **raw request body**
+(`express.raw({ type: () => true })` in `main.ts`, since devices POST non-JSON bodies).
+Both bare and `.aspx` variants are registered.
+
+| Route | Purpose |
+|-------|---------|
+| `GET /iclock/cdata` · `registry` | Handshake — returns device options; **auto-registers** an unknown SN (unapproved, unassigned, online) |
+| `GET /iclock/getrequest` | Device polls for commands; raw SQL returns `C:{id}:{command}` lines, or `OK` |
+| `POST /iclock/devicecmd` | Device reports command results — batched status updates (one UPDATE per return code) |
+| `POST /iclock/cdata?table=…` | Device pushes data: `ATTLOG` (punches, bulk insert-or-ignore + student/staff resolution), `OPERLOG`, `BIODATA`, `BIOPHOTO`, `options` |
+
+Hot paths avoid ORM hydration; logging is `setImmediate` fire-and-forget. When a template
+is enrolled on one device it is **queued to the school's other devices** so biometrics
+sync across terminals. PIN/user-code resolution maps to `student.admission_number` or
+`staff.employee_id` within the tenant schema.
+
+### 10.3 Management APIs
+
+- **Superadmin** (`/api/v1/superadmin/biometric-devices`, `SuperadminGuard`): list/filter,
+  approve, assign-to-school (requires the school's plan to include the feature),
+  unassign, deactivate(reason)/reactivate, restart, sync, delete, command log.
+- **School** (`/api/v1/school/biometric-devices`, admin roles + `BiometricPremiumGuard`):
+  list assigned devices, transactions, enrollments, stats, rename, restart, clear-logs,
+  **sync-users** (push active students+staff as `DATA USER` commands), delete a punch.
+  The premium guard checks the tenant plan's `features` and returns **403** otherwise.
+
+### 10.4 Frontend
+
+- School page `/biometric-devices` (Operations menu) — stats + Devices / Attendance /
+  Enrollments tabs; shows an upgrade prompt on the 403.
+- Superadmin page `/superadmin/biometric-devices` (Devices menu) — device table with
+  filters, assign/approve/deactivate, and command-log modal.
+
+### 10.5 Deploy notes
+
+- Run `npm run db:setup` (5 new tables) and `npm run seed` (adds the plan feature).
+- Point each terminal's server URL at the host **root** (`/iclock/…`, not under `/api`).
+- nginx forwards `/iclock/` to the API with `proxy_request_buffering off` + `gzip off`
+  so the raw device payload passes through unchanged (see `nginx-edupro.conf`).
+
+---
+
+## 11. Conventions
 
 - UUID PKs; `created_at`/`updated_at` via decorators; soft deletes on students/users/staff.
 - Money always in **paise**.
@@ -260,7 +334,7 @@ attendance summaries). PDFs are generated in background jobs, never blocking HTT
 
 ---
 
-## 11. Ports & environment
+## 12. Ports & environment
 
 | Service | Port |
 |---------|------|
@@ -275,7 +349,7 @@ Config via root `.env` (see `.env.example`). Note: values containing `#` must be
 
 ---
 
-## 12. Running locally
+## 13. Running locally
 
 ```bash
 npm install                 # root tooling
@@ -289,7 +363,7 @@ Default superadmin: `admin@edupro.app` / `Admin@123456`.
 
 ---
 
-## 13. Deployment (production, native)
+## 14. Deployment (production, native)
 
 See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full runbook. In short:
 
@@ -297,15 +371,16 @@ See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full runbook. In short:
 2. `npm run db:setup` — **required whenever new tables/columns were added**.
 3. `npm run build:backend && npm run build:frontend`
 4. `pm2 restart edupro` (config in `ecosystem.config.js`, cwd = `backend`, loads root `.env`)
-5. nginx (`nginx-edupro.conf`) serves `frontend/dist` and proxies `/api/` + `/uploads/`
-   to `127.0.0.1:3002`. The `uploads/` dir must be writable by the PM2 process.
+5. nginx (`nginx-edupro.conf`) serves `frontend/dist` and proxies `/api/`, `/uploads/`
+   and `/iclock/` (biometric devices) to `127.0.0.1:3002`. The `uploads/` dir must be
+   writable by the PM2 process.
 
 > `.gitignore` ignores the runtime `/uploads` and `backend/uploads` storage dirs but
 > **whitelists** `backend/src/modules/tenant/uploads/` (the source module of the same name).
 
 ---
 
-## 14. Notable features delivered
+## 15. Notable features delivered
 
 - **College mode** — institution type toggle; Courses (PG/UG/diploma…) as an optional
   parent of classes, with term-system (annual/semester/trimester) **auto-generating
@@ -321,10 +396,12 @@ See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full runbook. In short:
 - **Mobile + WhatsApp with country code** for students, parents and staff — in forms,
   profiles, **and Excel import/export** (with a "WhatsApp same as mobile" convenience).
 - **Superadmin** can change a school's admin account & password.
+- **Biometric device integration** (premium) — ZKTeco/ESSL push protocol, superadmin
+  device pool + per-school live attendance and template sync (see §10).
 
 ---
 
-## 15. Where to look first (for new contributors)
+## 16. Where to look first (for new contributors)
 
 | To understand… | Read |
 |----------------|------|
@@ -333,6 +410,7 @@ See [`DEPLOYMENT.md`](./DEPLOYMENT.md) for the full runbook. In short:
 | Permissions | `common/guards/roles.guard.ts`, `common/rbac/*`, frontend `lib/access.ts` |
 | All tenant tables | `database/data-datasource.ts` (`TENANT_ENTITIES`) |
 | A clean CRUD module example | `modules/tenant/courses/` or `modules/tenant/visitors/` |
+| Biometric device protocol | `modules/biometric/iclock.service.ts` (+ `main.ts` raw-body / prefix exclude) |
 | Frontend API surface | `frontend/src/services/school.api.ts` |
 | Routes & guards (web) | `frontend/src/routes/index.tsx` |
 ```
