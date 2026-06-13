@@ -14,6 +14,7 @@ import { VisitorsPage } from '@/pages/visitors/VisitorsPage';
 import { VisitsPage } from '@/pages/visitors/VisitsPage';
 import { StaffPage } from '@/pages/staff/StaffPage';
 import { StaffViewPage } from '@/pages/staff/StaffViewPage';
+import { BiometricDevicesPage } from '@/pages/biometric/BiometricDevicesPage';
 import { AcademicYearsPage } from '@/pages/setup/AcademicYearsPage';
 import { ClassesPage } from '@/pages/setup/ClassesPage';
 import { SubjectsPage } from '@/pages/setup/SubjectsPage';
@@ -41,6 +42,7 @@ import { PlansPage } from '@/pages/superadmin/PlansPage';
 import { SchoolsPage } from '@/pages/superadmin/SchoolsPage';
 import { BranchesPage } from '@/pages/superadmin/BranchesPage';
 import { SubscriptionsPage } from '@/pages/superadmin/SubscriptionsPage';
+import { BiometricDevicesPage as SaBiometricDevicesPage } from '@/pages/superadmin/BiometricDevicesPage';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
@@ -100,6 +102,7 @@ export function AppRoutes() {
         <Route index element={<OverviewPage />} />
         <Route path="schools" element={<SchoolsPage />} />
         <Route path="branches" element={<BranchesPage />} />
+        <Route path="biometric-devices" element={<SaBiometricDevicesPage />} />
         <Route path="plans" element={<PlansPage />} />
         <Route path="subscriptions" element={<SubscriptionsPage />} />
         <Route
@@ -169,6 +172,7 @@ export function AppRoutes() {
         <Route path="exams" element={<ExamsPage />} />
         <Route path="fees" element={<FeesPage />} />
         <Route path="timetable" element={<TimetablePage />} />
+        <Route path="biometric-devices" element={<BiometricDevicesPage />} />
 
         {/* Modules */}
         <Route

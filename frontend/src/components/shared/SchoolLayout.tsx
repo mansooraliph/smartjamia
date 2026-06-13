@@ -23,6 +23,7 @@ import {
   FileText,
   UserCheck,
   DoorOpen,
+  Fingerprint,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTerminology } from '@/hooks/useTerminology';
@@ -86,6 +87,7 @@ const navGroups: NavGroup[] = [
       { to: '/exams', label: 'Exams', icon: FileBarChart },
       { to: '/fees', label: 'Fees', icon: Wallet },
       { to: '/timetable', label: 'Timetable', icon: CalendarRange },
+      { to: '/biometric-devices', label: 'Biometric Devices', icon: Fingerprint },
     ],
   },
   {

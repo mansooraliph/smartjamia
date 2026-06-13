@@ -207,3 +207,86 @@ export const SubscriptionsApi = {
   remove: async (id: string) =>
     unwrap(await api.delete(`/superadmin/subscriptions/${id}`)),
 };
+
+// ───── Biometric devices ────────────────────────────────────────────────────
+export interface SaPaginated<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface BiometricDevice {
+  id: string;
+  sn: string;
+  alias: string | null;
+  terminalName: string | null;
+  deviceType: string;
+  deviceModel: string | null;
+  state: string | null;
+  ipAddress: string | null;
+  fwVer: string | null;
+  userCount: number | null;
+  fpCount: number | null;
+  faceCount: number | null;
+  palmCount: number | null;
+  transactionCount: number | null;
+  schoolId: string | null;
+  school?: School | null;
+  assignedAt: string | null;
+  isApproved: boolean;
+  approvedAt: string | null;
+  deactivatedAt: string | null;
+  deactivationReason: string | null;
+  lastSyncAt: string | null;
+  lastActivity: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BiometricCommand {
+  id: string;
+  sn: string;
+  schoolId: string | null;
+  command: string;
+  status: number; // 0 pending, 1 success, 2 error
+  deviceReturnCode: number | null;
+  createdAt: string;
+}
+
+export interface ListDevicesParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  schoolId?: string;
+  isApproved?: boolean;
+  isAssigned?: boolean;
+}
+
+export const BiometricDevicesApi = {
+  list: async (params?: ListDevicesParams): Promise<SaPaginated<BiometricDevice>> =>
+    unwrap(await api.get('/superadmin/biometric-devices', { params })),
+  unassigned: async (): Promise<BiometricDevice[]> =>
+    unwrap(await api.get('/superadmin/biometric-devices/unassigned')),
+  get: async (id: string): Promise<BiometricDevice> =>
+    unwrap(await api.get(`/superadmin/biometric-devices/${id}`)),
+  assign: async (id: string, schoolId: string): Promise<BiometricDevice> =>
+    unwrap(await api.patch(`/superadmin/biometric-devices/${id}/assign`, { schoolId })),
+  unassign: async (id: string): Promise<BiometricDevice> =>
+    unwrap(await api.patch(`/superadmin/biometric-devices/${id}/unassign`, {})),
+  approve: async (id: string): Promise<BiometricDevice> =>
+    unwrap(await api.patch(`/superadmin/biometric-devices/${id}/approve`, {})),
+  deactivate: async (id: string, reason: string): Promise<BiometricDevice> =>
+    unwrap(await api.patch(`/superadmin/biometric-devices/${id}/deactivate`, { reason })),
+  reactivate: async (id: string): Promise<BiometricDevice> =>
+    unwrap(await api.patch(`/superadmin/biometric-devices/${id}/reactivate`, {})),
+  restart: async (id: string) =>
+    unwrap(await api.post(`/superadmin/biometric-devices/${id}/restart`, {})),
+  sync: async (id: string) =>
+    unwrap(await api.post(`/superadmin/biometric-devices/${id}/sync`, {})),
+  remove: async (id: string) =>
+    unwrap(await api.delete(`/superadmin/biometric-devices/${id}`)),
+  deviceCommands: async (id: string): Promise<BiometricCommand[]> =>
+    unwrap(await api.get(`/superadmin/biometric-devices/${id}/commands`)),
+};

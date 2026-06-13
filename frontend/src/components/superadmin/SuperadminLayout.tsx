@@ -6,6 +6,7 @@ import {
   GitBranch,
   CreditCard,
   ReceiptText,
+  Fingerprint,
   ShieldCheck,
   Settings,
   ChevronsLeft,
@@ -23,6 +24,7 @@ const navItems = [
   { to: '/superadmin/branches', label: 'Branches', icon: GitBranch },
   { to: '/superadmin/plans', label: 'Plans', icon: CreditCard },
   { to: '/superadmin/subscriptions', label: 'Subscriptions', icon: ReceiptText },
+  { to: '/superadmin/biometric-devices', label: 'Devices', icon: Fingerprint },
 ];
 
 const secondaryNav = [

@@ -1407,3 +1407,108 @@ export const TimetableApi = {
   mySchedule: async (): Promise<TeacherSchedule> =>
     unwrap(await api.get('/school/timetable/my-schedule')),
 };
+
+// ───── Biometric devices (school side) ──────────────────────────────────────
+export interface BiometricDevice {
+  id: string;
+  sn: string;
+  alias: string | null;
+  terminalName: string | null;
+  deviceType: string;
+  state: string | null;
+  ipAddress: string | null;
+  userCount: number | null;
+  fpCount: number | null;
+  faceCount: number | null;
+  transactionCount: number | null;
+  isApproved: boolean;
+  deactivatedAt: string | null;
+  lastSyncAt: string | null;
+  lastActivity: string | null;
+  createdAt: string;
+}
+
+export interface BiometricTransaction {
+  id: string;
+  deviceSn: string;
+  userCode: string;
+  studentId: string | null;
+  staffId: string | null;
+  actualPunchTime: string;
+  punchTime: string;
+  punchState: number;
+  punchStateDisplay: string;
+  source: string;
+  createdAt: string;
+}
+
+export interface BiometricEnrollment {
+  id: string;
+  userCode: string;
+  studentId: string | null;
+  staffId: string | null;
+  deviceSn: string | null;
+  type: string;
+  index: string;
+  valid: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BiometricStats {
+  total_devices: number;
+  online_devices: number;
+  total_transactions_today: number;
+  enrolled_users: number;
+}
+
+export interface BiometricCommand {
+  id: string;
+  sn: string;
+  command: string;
+  status: number;
+  deviceReturnCode: number | null;
+  createdAt: string;
+}
+
+export interface BiometricTxParams {
+  page?: number;
+  limit?: number;
+  from?: string;
+  to?: string;
+  studentId?: string;
+  staffId?: string;
+  punchState?: number;
+}
+
+export const BiometricApi = {
+  listDevices: async (): Promise<BiometricDevice[]> =>
+    unwrap(await api.get('/school/biometric-devices')),
+  getDevice: async (id: string): Promise<BiometricDevice> =>
+    unwrap(await api.get(`/school/biometric-devices/${id}`)),
+  stats: async (): Promise<BiometricStats> =>
+    unwrap(await api.get('/school/biometric-devices/stats')),
+  transactions: async (
+    params?: BiometricTxParams,
+  ): Promise<Paginated<BiometricTransaction>> =>
+    unwrap(await api.get('/school/biometric-devices/transactions', { params })),
+  enrollments: async (params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    userCode?: string;
+  }): Promise<Paginated<BiometricEnrollment>> =>
+    unwrap(await api.get('/school/biometric-devices/enrollments', { params })),
+  commands: async (id: string): Promise<BiometricCommand[]> =>
+    unwrap(await api.get(`/school/biometric-devices/${id}/commands`)),
+  rename: async (id: string, alias: string): Promise<BiometricDevice> =>
+    unwrap(await api.patch(`/school/biometric-devices/${id}/alias`, { alias })),
+  restart: async (id: string) =>
+    unwrap(await api.post(`/school/biometric-devices/${id}/restart`, {})),
+  syncUsers: async (id: string) =>
+    unwrap(await api.post(`/school/biometric-devices/${id}/sync-users`, {})),
+  clearData: async (id: string) =>
+    unwrap(await api.post(`/school/biometric-devices/${id}/clear-data`, {})),
+  deleteTransaction: async (id: string) =>
+    unwrap(await api.delete(`/school/biometric-devices/transactions/${id}`)),
+};
