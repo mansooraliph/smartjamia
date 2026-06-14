@@ -105,49 +105,88 @@ export class IclockService {
     return rows.map((r) => `C:${r.id}:${r.command}`).join('\n');
   }
 
-  /** POST /iclock/devicecmd — device reports command results. */
-  async handleDeviceCommands(rawBody: string): Promise<string> {
+  /**
+   * POST /iclock/devicecmd — device reports command results.
+   *
+   * Each line is a URL-encoded query string, e.g. `ID=<id>&Return=0&CMD=DATA`.
+   * Successes are batched into one update; errors are grouped by return code.
+   * Lines missing ID or Return are skipped (so we never write status=2 with a
+   * null return code).
+   */
+  async handleDeviceCommands(rawBody: string, sn?: string): Promise<string> {
+    // Persist the raw ack so the exact device format is always inspectable.
+    this.logTraffic(sn ?? '', '/iclock/devicecmd', 'POST', 'devicecmd', rawBody);
     try {
-      const lines = rawBody.split('\n').map((l) => l.trim()).filter(Boolean);
       const successIds: string[] = [];
-      const errorMap = new Map<number, string[]>();
-      let hasInfo = false;
+      const errorsByCode = new Map<number, string[]>();
+      const ignored: string[] = [];
+      let infoHandled = false;
 
-      for (const line of lines) {
-        const kv = this.parseKv(line);
-        const id = kv['ID'];
-        // Only our own command IDs are UUIDs; ignore anything else so a bad
-        // ID can't blow up the DB query (invalid uuid syntax).
-        if (!id || !this.isUuid(id)) {
-          if (id) {
-            this.logger.warn(`devicecmd: ignoring non-UUID command ID "${id}"`);
-          }
+      for (const line of rawBody.split('\n')) {
+        if (line.trim() === '') continue;
+        // Parse as a query string (firmware uses '&'; tolerate tab delimiters).
+        const params = new URLSearchParams(line.replace(/\t/g, '&'));
+        const id = params.get('ID') ?? params.get('id');
+        const ret = params.get('Return') ?? params.get('return');
+        const cmd = params.get('CMD') ?? params.get('cmd');
+
+        // Refresh device info once per request, even on its own line.
+        if (cmd?.toUpperCase() === 'INFO' && !infoHandled) {
+          await this.updateDeviceInfo(rawBody, sn).catch(() => undefined);
+          infoHandled = true;
+        }
+
+        // Skip malformed lines rather than writing a bogus status.
+        if (id === null || ret === null) continue;
+        // Our command IDs are UUIDs; anything else can't match (and would break
+        // the uuid query) — record + skip.
+        if (!this.isUuid(id)) {
+          ignored.push(id);
           continue;
         }
-        if ((kv['CMD'] || '').toUpperCase() === 'INFO') hasInfo = true;
-        const ret = Number(kv['Return'] ?? kv['return'] ?? 0);
-        if (ret === 0) {
+
+        if (Number(ret) === 0) {
           successIds.push(id);
         } else {
-          const arr = errorMap.get(ret) ?? [];
+          const code = Number(ret);
+          const arr = errorsByCode.get(code) ?? [];
           arr.push(id);
-          errorMap.set(ret, arr);
+          errorsByCode.set(code, arr);
         }
       }
 
+      // One query for all successes.
+      let updated = 0;
       if (successIds.length) {
-        await this.commandRepo.update(
+        const r = await this.commandRepo.update(
           { id: In(successIds) },
           { status: 1, deviceReturnCode: 0 },
         );
+        updated += r.affected ?? 0;
       }
-      for (const [code, ids] of errorMap) {
-        await this.commandRepo.update(
+      // One query per distinct error code.
+      for (const [code, ids] of errorsByCode) {
+        const r = await this.commandRepo.update(
           { id: In(ids) },
           { status: 2, deviceReturnCode: code },
         );
+        updated += r.affected ?? 0;
       }
-      if (hasInfo) await this.updateDeviceInfo(rawBody).catch(() => undefined);
+
+      const errCount = [...errorsByCode.values()].reduce(
+        (a, b) => a + b.length,
+        0,
+      );
+      this.logger.log(
+        `devicecmd SN=${sn ?? '?'}: ok=${successIds.length} err=${errCount} ignored=${ignored.length} updated=${updated}`,
+      );
+      if (ignored.length) {
+        this.logger.warn(
+          `devicecmd: non-UUID command IDs (device may not echo our IDs): ${ignored
+            .slice(0, 5)
+            .join(', ')}`,
+        );
+      }
       return 'OK';
     } catch (err) {
       // Never 500 a device — log the cause and acknowledge so it doesn't retry-storm.

@@ -108,6 +108,7 @@ export class IclockController {
 
   @Post(['/iclock/devicecmd', '/iclock/devicecmd.aspx'])
   async deviceCommands(
+    @Query('SN') sn: string,
     @Req() req: RawBodyRequest<Request>,
     @Res() res: Response,
   ) {
@@ -115,7 +116,7 @@ export class IclockController {
       ? req.body.toString()
       : (req.rawBody?.toString() ?? '');
     await this.safe(res, req, 'devicecmd', () =>
-      this.iclock.handleDeviceCommands(rawBody),
+      this.iclock.handleDeviceCommands(rawBody, sn),
     );
   }
 }
