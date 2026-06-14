@@ -29,7 +29,7 @@ export class BiometricDeviceCommand {
   @Column({ type: 'uuid', name: 'school_id', nullable: true })
   schoolId: string | null;
 
-  /** Raw command string, e.g. "DATA USER PIN=1\tName=John". */
+  /** Raw command string, e.g. "DATA USER PIN=1\tName=John\tPri=0\tCard=\tPasswd=". */
   @Column({ type: 'text' })
   command: string;
 

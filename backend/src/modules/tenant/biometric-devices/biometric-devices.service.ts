@@ -231,7 +231,7 @@ export class BiometricDevicesService {
     // Add the user (prefixed PIN) first, then queue the enroll command.
     await this.iclock.queueDeviceCommand(
       schoolId,
-      `DATA USER PIN=${resolved.userCode}\tName=${resolved.name}\tPri=0`,
+      this.buildAddUserCommand(resolved.userCode, resolved.name),
       undefined,
       device.sn,
       userId,
@@ -305,7 +305,7 @@ export class BiometricDevicesService {
     }
     // Each device gets an add-user command followed by the enroll command.
     const commands = [
-      `DATA USER PIN=${resolved.userCode}\tName=${resolved.name}\tPri=0`,
+      this.buildAddUserCommand(resolved.userCode, resolved.name),
       this.buildEnrollCommand(resolved.userCode, dto.biometricType, dto.fingerId),
     ];
     return this.runBulk(deviceIds, schoolId, commands, userId);
@@ -372,6 +372,15 @@ export class BiometricDevicesService {
       failed_devices: failed,
       message: parts.join(', '),
     };
+  }
+
+  /**
+   * Build the device add/update-user command. ZKTeco/ESSL expects the Card and
+   * Passwd fields present (even if empty) — omitting them makes some firmware
+   * reject the record, so the user is never created.
+   */
+  private buildAddUserCommand(userCode: string, name: string): string {
+    return `DATA USER PIN=${userCode}\tName=${name}\tPri=0\tCard=\tPasswd=`;
   }
 
   private buildEnrollCommand(
@@ -638,7 +647,7 @@ export class BiometricDevicesService {
       throw new NotFoundException('No matching devices for this school');
     }
 
-    const addUserCmd = `DATA USER PIN=${user.userCode}\tName=${user.name}\tPri=0`;
+    const addUserCmd = this.buildAddUserCommand(user.userCode, user.name);
     const enrollCmd = this.buildEnrollCommand(
       user.userCode,
       dto.biometricType,
@@ -781,13 +790,13 @@ export class BiometricDevicesService {
       for (const s of students) {
         const name = `${s.firstName} ${s.lastName}`.trim();
         const code = buildUserCode('student', s.admissionNumber, prefixes);
-        cmds.push(`DATA USER PIN=${code}\tName=${name}\tPri=0`);
+        cmds.push(this.buildAddUserCommand(code, name));
       }
       for (const st of staff) {
         const name = nameById.get(st.userId) ?? st.employeeId;
         const type = this.staffUserType(roleById.get(st.userId));
         const code = buildUserCode(type, st.employeeId, prefixes);
-        cmds.push(`DATA USER PIN=${code}\tName=${name}\tPri=0`);
+        cmds.push(this.buildAddUserCommand(code, name));
       }
       return cmds;
     });
