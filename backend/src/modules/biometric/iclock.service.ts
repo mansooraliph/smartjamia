@@ -129,14 +129,15 @@ export class IclockService {
       .update({ sn }, { pushTime: now, lastActivity: now, state: '1' })
       .catch(() => undefined);
 
-    const rows: { id: string; command: string }[] = await this.master.query(
-      `SELECT id, command FROM biometric_device_commands
-       WHERE sn = $1 AND status = 0
-       ORDER BY created_at ASC LIMIT 20`,
+    // Send the short numeric `seq` as the command id (devices need a compact id).
+    const rows: { seq: number; command: string }[] = await this.master.query(
+      `SELECT seq, command FROM biometric_device_commands
+       WHERE sn = $1 AND status = 0 AND seq IS NOT NULL
+       ORDER BY seq ASC LIMIT 20`,
       [sn],
     );
     if (!rows.length) return 'OK';
-    return rows.map((r) => `C:${r.id}:${r.command}`).join('\n');
+    return rows.map((r) => `C:${r.seq}:${r.command}`).join('\n');
   }
 
   /**
@@ -151,8 +152,8 @@ export class IclockService {
     // Persist the raw ack so the exact device format is always inspectable.
     this.logTraffic(sn ?? '', '/iclock/devicecmd', 'POST', 'devicecmd', rawBody);
     try {
-      const successIds: string[] = [];
-      const errorsByCode = new Map<number, string[]>();
+      const successSeqs: number[] = [];
+      const errorsByCode = new Map<number, number[]>();
       const ignored: string[] = [];
       let infoHandled = false;
 
@@ -172,36 +173,36 @@ export class IclockService {
 
         // Skip malformed lines rather than writing a bogus status.
         if (id === null || ret === null) continue;
-        // Our command IDs are UUIDs; anything else can't match (and would break
-        // the uuid query) — record + skip.
-        if (!this.isUuid(id)) {
+        // The echoed ID is our numeric `seq`; ignore anything non-numeric.
+        const seq = Number(id);
+        if (!Number.isInteger(seq) || seq <= 0) {
           ignored.push(id);
           continue;
         }
 
         if (Number(ret) === 0) {
-          successIds.push(id);
+          successSeqs.push(seq);
         } else {
           const code = Number(ret);
           const arr = errorsByCode.get(code) ?? [];
-          arr.push(id);
+          arr.push(seq);
           errorsByCode.set(code, arr);
         }
       }
 
       // One query for all successes.
       let updated = 0;
-      if (successIds.length) {
+      if (successSeqs.length) {
         const r = await this.commandRepo.update(
-          { id: In(successIds) },
+          { seq: In(successSeqs) },
           { status: 1, deviceReturnCode: 0 },
         );
         updated += r.affected ?? 0;
       }
       // One query per distinct error code.
-      for (const [code, ids] of errorsByCode) {
+      for (const [code, seqs] of errorsByCode) {
         const r = await this.commandRepo.update(
-          { id: In(ids) },
+          { seq: In(seqs) },
           { status: 2, deviceReturnCode: code },
         );
         updated += r.affected ?? 0;
@@ -212,11 +213,11 @@ export class IclockService {
         0,
       );
       this.logger.log(
-        `devicecmd SN=${sn ?? '?'}: ok=${successIds.length} err=${errCount} ignored=${ignored.length} updated=${updated}`,
+        `devicecmd SN=${sn ?? '?'}: ok=${successSeqs.length} err=${errCount} ignored=${ignored.length} updated=${updated}`,
       );
       if (ignored.length) {
         this.logger.warn(
-          `devicecmd: non-UUID command IDs (device may not echo our IDs): ${ignored
+          `devicecmd: non-numeric command IDs ignored: ${ignored
             .slice(0, 5)
             .join(', ')}`,
         );
@@ -677,12 +678,6 @@ export class IclockService {
     } else {
       await repo.save(repo.create({ ...data, schoolId, deviceSn, index }));
     }
-  }
-
-  private isUuid(s: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      s,
-    );
   }
 
   private parseKv(line: string): Record<string, string> {

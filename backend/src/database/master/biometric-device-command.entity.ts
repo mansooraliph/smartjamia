@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Generated,
   Index,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -21,6 +22,17 @@ import {
 export class BiometricDeviceCommand {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /**
+   * Short auto-increment id sent to the device in `C:<seq>:<command>`. Devices
+   * expect a compact numeric command id (a 36-char UUID overflows the per-command
+   * buffer for long commands like DATA USER, so they get dropped). The ack maps
+   * back to the row by this value.
+   */
+  @Index({ unique: true })
+  @Generated('increment')
+  @Column({ type: 'integer', nullable: true })
+  seq: number | null;
 
   /** Target device serial number. */
   @Column({ type: 'varchar', length: 100 })
