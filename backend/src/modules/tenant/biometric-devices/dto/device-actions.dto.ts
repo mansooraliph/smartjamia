@@ -10,10 +10,19 @@ import {
   IsString,
   IsUUID,
   Max,
+  MaxLength,
   Min,
 } from 'class-validator';
 
 export type BiometricType = 'fingerprint' | 'face' | 'palm';
+
+/** Queue an arbitrary raw command to a device (manual / advanced). */
+export class RunCommandDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2000)
+  command: string;
+}
 
 /** Set the duplicate-punch (re-record) interval on a single device. */
 export class SetDuplicatePunchDto {

@@ -34,6 +34,7 @@ import {
   EnrollRemotelyDto,
   EnrollUserDto,
   ListEnrollUsersQueryDto,
+  RunCommandDto,
   SetDuplicatePunchDto,
   UpdateDeviceSettingsDto,
 } from './dto/device-actions.dto';
@@ -257,6 +258,17 @@ export class BiometricDevicesController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ) {
     return this.svc.clearPendingCommands(t.schoolId, id);
+  }
+
+  @Post(':id/command')
+  @ApiOperation({ summary: 'Queue an arbitrary raw command to a device' })
+  runCommand(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: RunCommandDto,
+  ) {
+    return this.svc.runManualCommand(t.schoolId, id, dto.command, userId(req));
   }
 
   @Post(':id/sync-users')

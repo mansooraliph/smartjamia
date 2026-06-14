@@ -739,6 +739,34 @@ export class BiometricDevicesService {
     return { queued: true, sn: d.sn };
   }
 
+  /**
+   * Queue an arbitrary raw command to a device (manual / advanced tool). The
+   * literal two-char sequence `\t` is converted to a real tab so users can type
+   * tab-separated commands (e.g. DATA USER PIN=1\tName=John); CR/LF are stripped
+   * since one call = one command.
+   */
+  async runManualCommand(
+    schoolId: string,
+    id: string,
+    rawCommand: string,
+    userId?: string,
+  ) {
+    const device = await this.findDevice(schoolId, id);
+    const command = (rawCommand ?? '')
+      .replace(/\\t/g, '\t')
+      .replace(/[\r\n]/g, '')
+      .trim();
+    if (!command) throw new BadRequestException('Command is empty');
+    await this.commandRepo.insert({
+      sn: device.sn,
+      schoolId,
+      command,
+      status: 0,
+      createdByUserId: userId ?? null,
+    });
+    return { queued: true, sn: device.sn, command };
+  }
+
   /** Delete all still-pending (queued, not yet acked) commands for a device. */
   async clearPendingCommands(schoolId: string, id: string) {
     // findDevice verifies the device belongs to this school; clear every pending

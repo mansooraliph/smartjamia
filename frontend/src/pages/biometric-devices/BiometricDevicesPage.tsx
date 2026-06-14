@@ -19,6 +19,7 @@ import { SetDuplicatePunchModal } from './modals/SetDuplicatePunchModal';
 import { EnrollUserModal } from './modals/EnrollUserModal';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
 import { DeviceSettingsModal } from './modals/DeviceSettingsModal';
+import { RunCommandModal } from './modals/RunCommandModal';
 
 type ConfirmState =
   | { kind: 'restart'; device: BiometricDeviceDto }
@@ -65,6 +66,7 @@ export function BiometricDevicesPage() {
   const [punch, setPunch] = useState<PunchState>(null);
   const [enroll, setEnroll] = useState<{ presetDeviceIds?: string[] } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [runCmdDevice, setRunCmdDevice] = useState<BiometricDeviceDto | null>(null);
   const [renameDevice, setRenameDevice] = useState<BiometricDeviceDto | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -127,6 +129,9 @@ export function BiometricDevicesPage() {
         break;
       case 'clear-commands':
         setConfirm({ kind: 'clear-commands', device });
+        break;
+      case 'run-command':
+        setRunCmdDevice(device);
         break;
     }
   };
@@ -350,6 +355,14 @@ export function BiometricDevicesPage() {
         <DeviceSettingsModal
           onClose={() => setSettingsOpen(false)}
           onSaved={() => undefined}
+        />
+      )}
+
+      {runCmdDevice && (
+        <RunCommandModal
+          device={runCmdDevice}
+          onClose={() => setRunCmdDevice(null)}
+          onSuccess={() => undefined}
         />
       )}
 

@@ -151,6 +151,11 @@ export const BiometricDevicesApi = {
     unwrap(await api.post(`${BASE}/${id}/clear-data`, {})),
   clearCommands: async (id: string): Promise<{ cleared: number; sn: string }> =>
     unwrap(await api.post(`${BASE}/${id}/clear-commands`, {})),
+  runCommand: async (
+    id: string,
+    command: string,
+  ): Promise<{ queued: boolean; sn: string; command: string }> =>
+    unwrap(await api.post(`${BASE}/${id}/command`, { command })),
   deleteTransaction: async (id: string) =>
     unwrap(await api.delete(`${BASE}/transactions/${id}`)),
 
