@@ -12,6 +12,7 @@ import {
   Pencil,
   RefreshCw,
   Eraser,
+  Ban,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { cn } from '@/lib/cn';
@@ -27,7 +28,8 @@ export type DeviceAction =
   | 'commands'
   | 'rename'
   | 'sync-users'
-  | 'clear';
+  | 'clear'
+  | 'clear-commands';
 
 interface Props {
   device: BiometricDeviceDto;
@@ -189,6 +191,9 @@ export function DeviceCard({
               </button>
               <button className={menuItem} onClick={fire('commands')}>
                 <Terminal className="h-4 w-4" /> View Commands
+              </button>
+              <button className={menuItem} onClick={fire('clear-commands')}>
+                <Ban className="h-4 w-4" /> Clear Pending Commands
               </button>
               <div className="my-1 border-t border-slate-100" />
               <button className={menuItem} onClick={fire('rename')}>

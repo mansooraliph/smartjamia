@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Req,
   UseGuards,
@@ -34,6 +35,7 @@ import {
   EnrollUserDto,
   ListEnrollUsersQueryDto,
   SetDuplicatePunchDto,
+  UpdateDeviceSettingsDto,
 } from './dto/device-actions.dto';
 
 const userId = (req: Request): string =>
@@ -79,6 +81,21 @@ export class BiometricDevicesController {
       q.type,
       q.search,
     );
+  }
+
+  @Get('settings')
+  @ApiOperation({ summary: 'Get device settings (PIN prefixes)' })
+  getSettings(@Tenant() t: TenantContext) {
+    return this.svc.getDeviceSettings(t.schoolId, t.schemaName);
+  }
+
+  @Put('settings')
+  @ApiOperation({ summary: 'Update device settings (PIN prefixes)' })
+  updateSettings(
+    @Tenant() t: TenantContext,
+    @Body() dto: UpdateDeviceSettingsDto,
+  ) {
+    return this.svc.updateDeviceSettings(t.schoolId, t.schemaName, dto.prefixes);
   }
 
   @Get('stats')
@@ -231,6 +248,15 @@ export class BiometricDevicesController {
       dto,
       userId(req),
     );
+  }
+
+  @Post(':id/clear-commands')
+  @ApiOperation({ summary: 'Delete all pending (queued) commands for a device' })
+  clearCommands(
+    @Tenant() t: TenantContext,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.svc.clearPendingCommands(t.schoolId, id);
   }
 
   @Post(':id/sync-users')

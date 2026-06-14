@@ -14,11 +14,18 @@ import { Student } from '../../../database/tenant/student.entity';
 import { Staff } from '../../../database/tenant/staff.entity';
 import { User } from '../../../database/tenant/user.entity';
 import { Visitor } from '../../../database/tenant/visitor.entity';
+import { SchoolProfile } from '../../../database/tenant/school-profile.entity';
+import { School } from '../../../database/master/school.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
 import { IclockService } from '../../biometric/iclock.service';
 import {
   EnrollUserType,
+  PrefixConfig,
   buildUserCode,
+  loadBiometricPrefixes,
+  prefixesFromSettings,
+  sanitizePrefixes,
+  validatePrefixes,
   visitorBase,
 } from '../../biometric/user-code.util';
 import { paginate } from '../../../common/dto/pagination.dto';
@@ -57,6 +64,7 @@ export class BiometricDevicesService {
   private readonly logger = new Logger(BiometricDevicesService.name);
   private readonly deviceRepo: Repository<BiometricDevice>;
   private readonly commandRepo: Repository<BiometricDeviceCommand>;
+  private readonly schoolRepo: Repository<School>;
 
   constructor(
     @InjectDataSource('master') master: DataSource,
@@ -65,6 +73,53 @@ export class BiometricDevicesService {
   ) {
     this.deviceRepo = master.getRepository(BiometricDevice);
     this.commandRepo = master.getRepository(BiometricDeviceCommand);
+    this.schoolRepo = master.getRepository(School);
+  }
+
+  // ── Device settings: configurable PIN prefixes per school ───────────────────
+
+  /** Current prefix config (defaults filled in for any unset type). */
+  getDeviceSettings(
+    schoolId: string,
+    schemaName: string,
+  ): Promise<{ prefixes: PrefixConfig }> {
+    return this.tenant.runInSchema(schemaName, async (em) => {
+      const profile = await em
+        .getRepository(SchoolProfile)
+        .findOne({ where: { schoolId }, select: { id: true, settings: true } });
+      return { prefixes: prefixesFromSettings(profile?.settings) };
+    });
+  }
+
+  /** Validate + persist the per-school PIN prefixes. */
+  async updateDeviceSettings(
+    schoolId: string,
+    schemaName: string,
+    prefixesInput: Partial<PrefixConfig>,
+  ): Promise<{ prefixes: PrefixConfig }> {
+    const prefixes = sanitizePrefixes(prefixesInput);
+    const error = validatePrefixes(prefixes);
+    if (error) throw new BadRequestException(error);
+
+    return this.tenant.runInSchema(schemaName, async (em) => {
+      const repo = em.getRepository(SchoolProfile);
+      let profile = await repo.findOne({ where: { schoolId } });
+      if (!profile) {
+        // school_profile.name is NOT NULL — seed it from the master record.
+        const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+        profile = repo.create({
+          schoolId,
+          name: school?.name ?? 'School',
+          settings: {},
+        });
+      }
+      profile.settings = {
+        ...(profile.settings ?? {}),
+        biometricPrefixes: prefixes,
+      };
+      await repo.save(profile);
+      return { prefixes };
+    });
   }
 
   // ── Devices (master, scoped to this school) ─────────────────────────────────
@@ -346,6 +401,7 @@ export class BiometricDevicesService {
     rawCode: string,
   ): Promise<{ userCode: string; name: string } | null> {
     return this.tenant.runInSchema(schemaName, async (em) => {
+      const prefixes = await loadBiometricPrefixes(em, schoolId);
       const student = await em.getRepository(Student).findOne({
         where: { schoolId, admissionNumber: rawCode },
         select: {
@@ -357,7 +413,7 @@ export class BiometricDevicesService {
       });
       if (student) {
         return {
-          userCode: buildUserCode('student', student.admissionNumber),
+          userCode: buildUserCode('student', student.admissionNumber, prefixes),
           name: `${student.firstName} ${student.lastName}`.trim(),
         };
       }
@@ -374,7 +430,7 @@ export class BiometricDevicesService {
           : null;
         const type = this.staffUserType(u?.role);
         return {
-          userCode: buildUserCode(type, staff.employeeId),
+          userCode: buildUserCode(type, staff.employeeId, prefixes),
           name: u?.name ?? staff.employeeId,
         };
       }
@@ -403,6 +459,7 @@ export class BiometricDevicesService {
     const term = (search ?? '').trim();
     const like = `%${term}%`;
     return this.tenant.runInSchema(schemaName, async (em) => {
+      const prefixes = await loadBiometricPrefixes(em, schoolId);
       if (type === 'student') {
         const qb = em
           .getRepository(Student)
@@ -421,7 +478,7 @@ export class BiometricDevicesService {
           id: s.id,
           userType: 'student' as const,
           code: s.admissionNumber,
-          userCode: buildUserCode('student', s.admissionNumber),
+          userCode: buildUserCode('student', s.admissionNumber, prefixes),
           name: `${s.firstName} ${s.lastName}`.trim(),
           subtitle: s.admissionNumber,
         }));
@@ -456,7 +513,7 @@ export class BiometricDevicesService {
           id: r.id,
           userType: type,
           code: r.employee_id,
-          userCode: buildUserCode(type, r.employee_id),
+          userCode: buildUserCode(type, r.employee_id, prefixes),
           name: r.name ?? r.employee_id,
           subtitle: r.employee_id,
         }));
@@ -479,7 +536,7 @@ export class BiometricDevicesService {
           id: v.id,
           userType: 'visitor' as const,
           code: base,
-          userCode: buildUserCode('visitor', base),
+          userCode: buildUserCode('visitor', base, prefixes),
           name: v.name,
           subtitle: v.mobile,
         };
@@ -495,6 +552,7 @@ export class BiometricDevicesService {
     id: string,
   ): Promise<EnrollableUser | null> {
     return this.tenant.runInSchema(schemaName, async (em) => {
+      const prefixes = await loadBiometricPrefixes(em, schoolId);
       if (type === 'student') {
         const s = await em.getRepository(Student).findOne({
           where: { id, schoolId },
@@ -510,7 +568,7 @@ export class BiometricDevicesService {
           id: s.id,
           userType: 'student',
           code: s.admissionNumber,
-          userCode: buildUserCode('student', s.admissionNumber),
+          userCode: buildUserCode('student', s.admissionNumber, prefixes),
           name: `${s.firstName} ${s.lastName}`.trim(),
           subtitle: s.admissionNumber,
         };
@@ -533,7 +591,7 @@ export class BiometricDevicesService {
           id: st.id,
           userType: resolvedType,
           code: st.employeeId,
-          userCode: buildUserCode(resolvedType, st.employeeId),
+          userCode: buildUserCode(resolvedType, st.employeeId, prefixes),
           name: u?.name ?? st.employeeId,
           subtitle: st.employeeId,
         };
@@ -548,7 +606,7 @@ export class BiometricDevicesService {
         id: v.id,
         userType: 'visitor',
         code: base,
-        userCode: buildUserCode('visitor', base),
+        userCode: buildUserCode('visitor', base, prefixes),
         name: v.name,
         subtitle: v.mobile,
       };
@@ -589,21 +647,21 @@ export class BiometricDevicesService {
 
     const successIds: string[] = [];
     const failed: string[] = [];
-    const rows: Partial<BiometricDeviceCommand>[] = [];
+    const addRows: Partial<BiometricDeviceCommand>[] = [];
+    const enrollRows: Partial<BiometricDeviceCommand>[] = [];
     for (const device of devices) {
       if (device.deactivatedAt) {
         failed.push(this.label(device));
         continue;
       }
-      // Add-user first so the device knows the PIN, then the enroll command.
-      rows.push({
+      addRows.push({
         sn: device.sn,
         schoolId,
         command: addUserCmd,
         status: 0,
         createdByUserId: requestedByUserId ?? null,
       });
-      rows.push({
+      enrollRows.push({
         sn: device.sn,
         schoolId,
         command: enrollCmd,
@@ -612,7 +670,10 @@ export class BiometricDevicesService {
       });
       successIds.push(device.id);
     }
-    if (rows.length) await this.commandRepo.insert(rows);
+    // Insert add-user commands FIRST (earlier created_at) so the device creates
+    // the user before the enroll command runs — getrequest orders by created_at.
+    if (addRows.length) await this.commandRepo.insert(addRows);
+    if (enrollRows.length) await this.commandRepo.insert(enrollRows);
 
     // Record a pending enrollment row (refreshed when the template arrives).
     const typeLabel = BIO_TYPE_LABEL[dto.biometricType];
@@ -669,6 +730,15 @@ export class BiometricDevicesService {
     return { queued: true, sn: d.sn };
   }
 
+  /** Delete all still-pending (queued, not yet acked) commands for a device. */
+  async clearPendingCommands(schoolId: string, id: string) {
+    // findDevice verifies the device belongs to this school; clear every pending
+    // command for its SN (incl. any queued before assignment with a null school).
+    const device = await this.findDevice(schoolId, id);
+    const res = await this.commandRepo.delete({ sn: device.sn, status: 0 });
+    return { cleared: res.affected ?? 0, sn: device.sn };
+  }
+
   deviceCommands(schoolId: string, id: string) {
     return this.findDevice(schoolId, id).then((d) =>
       this.commandRepo.find({
@@ -688,6 +758,7 @@ export class BiometricDevicesService {
   ) {
     const device = await this.findDevice(schoolId, id);
     const commands = await this.tenant.runInSchema(schemaName, async (em) => {
+      const prefixes = await loadBiometricPrefixes(em, schoolId);
       const students = await em.getRepository(Student).find({
         where: { schoolId, status: 'active' as any },
         select: { admissionNumber: true, firstName: true, lastName: true },
@@ -709,13 +780,13 @@ export class BiometricDevicesService {
       const cmds: string[] = [];
       for (const s of students) {
         const name = `${s.firstName} ${s.lastName}`.trim();
-        const code = buildUserCode('student', s.admissionNumber);
+        const code = buildUserCode('student', s.admissionNumber, prefixes);
         cmds.push(`DATA USER PIN=${code}\tName=${name}\tPri=0`);
       }
       for (const st of staff) {
         const name = nameById.get(st.userId) ?? st.employeeId;
         const type = this.staffUserType(roleById.get(st.userId));
-        const code = buildUserCode(type, st.employeeId);
+        const code = buildUserCode(type, st.employeeId, prefixes);
         cmds.push(`DATA USER PIN=${code}\tName=${name}\tPri=0`);
       }
       return cmds;

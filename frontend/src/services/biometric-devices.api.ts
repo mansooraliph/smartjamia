@@ -80,6 +80,13 @@ export interface DeviceStats {
   unsynced: number;
 }
 
+export interface DevicePrefixes {
+  student: string;
+  teacher: string;
+  staff: string;
+  visitor: string;
+}
+
 export interface UserSearchResult {
   id: string;
   userCode: string;
@@ -142,6 +149,8 @@ export const BiometricDevicesApi = {
     unwrap(await api.post(`${BASE}/${id}/sync-users`, {})),
   clearData: async (id: string) =>
     unwrap(await api.post(`${BASE}/${id}/clear-data`, {})),
+  clearCommands: async (id: string): Promise<{ cleared: number; sn: string }> =>
+    unwrap(await api.post(`${BASE}/${id}/clear-commands`, {})),
   deleteTransaction: async (id: string) =>
     unwrap(await api.delete(`${BASE}/transactions/${id}`)),
 
@@ -169,6 +178,14 @@ export const BiometricDevicesApi = {
     unwrap(await api.get(`${BASE}/enroll/users`, { params: { type, search } })),
   enrollUser: async (payload: EnrollUserPayload): Promise<BulkActionResult> =>
     unwrap(await api.post(`${BASE}/enrollments`, payload)),
+
+  // ── Device settings (configurable PIN prefixes) ─────────────────────────────
+  getSettings: async (): Promise<{ prefixes: DevicePrefixes }> =>
+    unwrap(await api.get(`${BASE}/settings`)),
+  updateSettings: async (
+    prefixes: DevicePrefixes,
+  ): Promise<{ prefixes: DevicePrefixes }> =>
+    unwrap(await api.put(`${BASE}/settings`, { prefixes })),
 
   // ── User search (for the enroll modal) — reuses existing endpoints ──────────
   searchUsers: async (query: string): Promise<UserSearchResult[]> => {

@@ -5,6 +5,7 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -74,6 +75,12 @@ export interface BulkActionResult {
   failed_count: number;
   failed_devices: string[];
   message: string;
+}
+
+/** Update the per-school device PIN prefixes. Validated in the service. */
+export class UpdateDeviceSettingsDto {
+  @IsObject()
+  prefixes: Record<string, string>;
 }
 
 export type EnrollUserType = 'student' | 'teacher' | 'staff' | 'visitor';

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lock, Radio, UserPlus } from 'lucide-react';
+import { Lock, Radio, UserPlus, Settings } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { Field, Input } from '@/components/ui/Input';
@@ -18,10 +18,12 @@ import { DeviceDetailDrawer } from './DeviceDetailDrawer';
 import { SetDuplicatePunchModal } from './modals/SetDuplicatePunchModal';
 import { EnrollUserModal } from './modals/EnrollUserModal';
 import { ConfirmActionModal } from './modals/ConfirmActionModal';
+import { DeviceSettingsModal } from './modals/DeviceSettingsModal';
 
 type ConfirmState =
   | { kind: 'restart'; device: BiometricDeviceDto }
   | { kind: 'clear'; device: BiometricDeviceDto }
+  | { kind: 'clear-commands'; device: BiometricDeviceDto }
   | { kind: 'bulk-restart' }
   | null;
 
@@ -52,6 +54,8 @@ export function BiometricDevicesPage() {
     queryKey: ['bio-devices'],
     queryFn: BiometricDevicesApi.listDevices,
     enabled: !forbidden,
+    // Keep online/offline + last-seen fresh (devices flip offline after ~40s).
+    refetchInterval: 20000,
   });
   const devices = devicesQuery.data ?? [];
   const stats = useMemo(() => deriveStats(devices), [devices]);
@@ -60,6 +64,7 @@ export function BiometricDevicesPage() {
   const [confirm, setConfirm] = useState<ConfirmState>(null);
   const [punch, setPunch] = useState<PunchState>(null);
   const [enroll, setEnroll] = useState<{ presetDeviceIds?: string[] } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [renameDevice, setRenameDevice] = useState<BiometricDeviceDto | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -120,6 +125,9 @@ export function BiometricDevicesPage() {
       case 'clear':
         setConfirm({ kind: 'clear', device });
         break;
+      case 'clear-commands':
+        setConfirm({ kind: 'clear-commands', device });
+        break;
     }
   };
 
@@ -133,6 +141,9 @@ export function BiometricDevicesPage() {
       if (confirm.kind === 'clear') {
         return BiometricDevicesApi.clearData(confirm.device.id);
       }
+      if (confirm.kind === 'clear-commands') {
+        return BiometricDevicesApi.clearCommands(confirm.device.id);
+      }
       if (confirm.kind === 'bulk-restart') {
         return BiometricDevicesApi.bulkRestart([...selectedIds]);
       }
@@ -142,6 +153,9 @@ export function BiometricDevicesPage() {
       if (confirm.kind === 'bulk-restart') {
         reportBulk(res as BulkActionResult, 'Restart command sent');
         clearSelection();
+      } else if (confirm.kind === 'clear-commands') {
+        const n = (res as { cleared: number })?.cleared ?? 0;
+        toast.success(`Cleared ${n} pending command(s)`);
       } else {
         const name = confirm.device.alias || confirm.device.sn;
         toast.success(
@@ -232,11 +246,21 @@ export function BiometricDevicesPage() {
         title="Biometric Devices"
         description="Manage and monitor your biometric terminals."
         actions={
-          devices.length > 0 ? (
-            <button className="btn-primary" onClick={() => setEnroll({})}>
-              <UserPlus className="mr-1.5 h-4 w-4" /> Enroll User
+          <>
+            <button
+              className="btn-secondary"
+              onClick={() => setSettingsOpen(true)}
+              title="Device settings"
+            >
+              <Settings className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Settings</span>
             </button>
-          ) : undefined
+            {devices.length > 0 && (
+              <button className="btn-primary" onClick={() => setEnroll({})}>
+                <UserPlus className="mr-1.5 h-4 w-4" /> Enroll User
+              </button>
+            )}
+          </>
         }
       />
 
@@ -322,6 +346,13 @@ export function BiometricDevicesPage() {
         />
       )}
 
+      {settingsOpen && (
+        <DeviceSettingsModal
+          onClose={() => setSettingsOpen(false)}
+          onSaved={() => undefined}
+        />
+      )}
+
       {renameDevice && (
         <RenameModal
           device={renameDevice}
@@ -339,16 +370,26 @@ export function BiometricDevicesPage() {
           title={
             confirm.kind === 'clear'
               ? 'Clear device logs?'
-              : confirm.kind === 'bulk-restart'
-                ? `Restart ${selectedIds.size} device(s)?`
-                : 'Restart device?'
+              : confirm.kind === 'clear-commands'
+                ? 'Clear pending commands?'
+                : confirm.kind === 'bulk-restart'
+                  ? `Restart ${selectedIds.size} device(s)?`
+                  : 'Restart device?'
           }
           description={
             confirm.kind === 'clear'
               ? 'Queues a command to delete attendance logs stored on the device (enrolled users are kept).'
-              : 'This will reboot the device. Any ongoing authentication will be interrupted.'
+              : confirm.kind === 'clear-commands'
+                ? 'Removes all queued commands not yet sent to this device. Any pending enrollment/sync for it will be cancelled.'
+                : 'This will reboot the device. Any ongoing authentication will be interrupted.'
           }
-          confirmLabel={confirm.kind === 'clear' ? 'Clear logs' : 'Restart'}
+          confirmLabel={
+            confirm.kind === 'clear'
+              ? 'Clear logs'
+              : confirm.kind === 'clear-commands'
+                ? 'Clear commands'
+                : 'Restart'
+          }
           loading={confirmMutation.isPending}
           onConfirm={() => confirmMutation.mutate()}
           onClose={() => setConfirm(null)}

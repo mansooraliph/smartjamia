@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, EntityManager, In, Repository } from 'typeorm';
 import { BiometricDevice } from '../../database/master/biometric-device.entity';
@@ -11,7 +12,12 @@ import { Student } from '../../database/tenant/student.entity';
 import { Staff } from '../../database/tenant/staff.entity';
 import { Visitor } from '../../database/tenant/visitor.entity';
 import { TenantSchemaService } from '../../common/tenant/tenant-schema.service';
-import { EnrollUserType, parseUserCode } from './user-code.util';
+import {
+  EnrollUserType,
+  PrefixConfig,
+  loadBiometricPrefixes,
+  parseUserCode,
+} from './user-code.util';
 
 interface ResolvedUser {
   studentId: string | null;
@@ -41,6 +47,32 @@ export class IclockService {
     this.commandRepo = master.getRepository(BiometricDeviceCommand);
     this.logRepo = master.getRepository(BiometricDeviceLog);
     this.schoolRepo = master.getRepository(School);
+  }
+
+  /** No heartbeat (getrequest/cdata) within this window → considered offline. */
+  private static readonly OFFLINE_AFTER_MS = 40_000;
+
+  /**
+   * Flip devices to offline when they stop polling. Runs every 15s; a device is
+   * offline if its last heartbeat (last_activity) is older than 40s. lastActivity
+   * is stored as an ISO string, which sorts chronologically, so a string compare
+   * is correct here.
+   */
+  @Interval('biometric-mark-offline', 15_000)
+  async markStaleDevicesOffline(): Promise<void> {
+    const cutoff = new Date(
+      Date.now() - IclockService.OFFLINE_AFTER_MS,
+    ).toISOString();
+    await this.deviceRepo
+      .query(
+        `UPDATE biometric_devices
+           SET state = '0'
+         WHERE state = '1'
+           AND last_activity IS NOT NULL
+           AND last_activity < $1`,
+        [cutoff],
+      )
+      .catch(() => undefined);
   }
 
   // ── Public protocol handlers ───────────────────────────────────────────────
@@ -90,9 +122,11 @@ export class IclockService {
 
   /** GET /iclock/getrequest — device polls for pending commands. (hot path) */
   async handleGetRequest(sn: string): Promise<string> {
-    // Mark poll time without blocking (fire-and-forget).
+    // getrequest is the device's heartbeat — update "last seen" (lastActivity)
+    // here, not just on handshake/cdata, so the UI reflects live polling.
+    const now = new Date().toISOString();
     this.deviceRepo
-      .update({ sn }, { pushTime: new Date().toISOString(), state: '1' })
+      .update({ sn }, { pushTime: now, lastActivity: now, state: '1' })
       .catch(() => undefined);
 
     const rows: { id: string; command: string }[] = await this.master.query(
@@ -253,8 +287,9 @@ export class IclockService {
     const schoolId = device.schoolId;
 
     return this.tenant.runInSchema(schemaName, async (em) => {
+      const prefixes = await loadBiometricPrefixes(em, schoolId);
       const userCodes = [...new Set(rows.map((r) => r[0]).filter(Boolean))];
-      const resolved = await this.resolveUsers(em, schoolId, userCodes);
+      const resolved = await this.resolveUsers(em, schoolId, userCodes, prefixes);
 
       const values = rows
         .filter((r) => r[0] && r[1])
@@ -318,6 +353,7 @@ export class IclockService {
       .filter((l) => /pin=/i.test(l));
 
     await this.tenant.runInSchema(schemaName, async (em) => {
+      const prefixes = await loadBiometricPrefixes(em, schoolId);
       for (const line of records) {
         const kv = this.parseKv(line.replace(/^BIODATA\s+/i, ''));
         const userCode = kv['Pin'] || kv['PIN'];
@@ -325,7 +361,9 @@ export class IclockService {
         const typeCode = this.bioTypeLabel(kv['Type'] ?? kv['type']);
         const index = kv['Index'] ?? kv['No'] ?? '0';
         const [ru] = [
-          (await this.resolveUsers(em, schoolId, [userCode])).get(userCode),
+          (await this.resolveUsers(em, schoolId, [userCode], prefixes)).get(
+            userCode,
+          ),
         ];
         await this.upsertEnrollment(em, schoolId, sn, {
           userCode,
@@ -371,14 +409,15 @@ export class IclockService {
       .filter((l) => /pin=/i.test(l));
 
     await this.tenant.runInSchema(schemaName, async (em) => {
+      const prefixes = await loadBiometricPrefixes(em, schoolId);
       for (const line of records) {
         const kv = this.parseKv(line.replace(/^(BIOPHOTO|USERPIC)\s+/i, ''));
         const userCode = kv['Pin'] || kv['PIN'];
         if (!userCode) continue;
         const isUserPic = /^USERPIC/i.test(line);
-        const ru = (await this.resolveUsers(em, schoolId, [userCode])).get(
-          userCode,
-        );
+        const ru = (
+          await this.resolveUsers(em, schoolId, [userCode], prefixes)
+        ).get(userCode);
         await this.upsertEnrollment(em, schoolId, sn, {
           userCode,
           type: isUserPic ? 'USERPIC' : 'BIOPHOTO',
@@ -529,6 +568,7 @@ export class IclockService {
     em: EntityManager,
     schoolId: string,
     userCodes: string[],
+    prefixes: PrefixConfig,
   ): Promise<Map<string, ResolvedUser>> {
     const map = new Map<string, ResolvedUser>();
     if (!userCodes.length) return map;
@@ -540,7 +580,7 @@ export class IclockService {
     const legacy: string[] = [];
 
     for (const raw of userCodes) {
-      const parsed = parseUserCode(raw);
+      const parsed = parseUserCode(raw, prefixes);
       if (!parsed) {
         legacy.push(raw);
         continue;
@@ -590,7 +630,7 @@ export class IclockService {
       for (const st of staff) {
         for (const raw of staffBases.get(st.employeeId) ?? []) {
           if (map.has(raw)) continue; // a student match already won this code
-          const parsed = parseUserCode(raw);
+          const parsed = parseUserCode(raw, prefixes);
           map.set(raw, {
             studentId: null,
             staffId: st.id,
