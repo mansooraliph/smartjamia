@@ -363,15 +363,16 @@ export class BiometricDevicesService {
       }
       const staff = await em.getRepository(Staff).findOne({
         where: { schoolId, employeeId: rawCode },
-        select: { id: true, employeeId: true, userId: true, designation: true },
+        select: { id: true, employeeId: true, userId: true },
       });
       if (staff) {
         const u = staff.userId
-          ? await em
-              .getRepository(User)
-              .findOne({ where: { id: staff.userId }, select: { id: true, name: true } })
+          ? await em.getRepository(User).findOne({
+              where: { id: staff.userId },
+              select: { id: true, name: true, role: true },
+            })
           : null;
-        const type = this.staffUserType(staff.designation);
+        const type = this.staffUserType(u?.role);
         return {
           userCode: buildUserCode(type, staff.employeeId),
           name: u?.name ?? staff.employeeId,
@@ -387,11 +388,9 @@ export class BiometricDevicesService {
 
   // ── User enrollment (students / teachers / staff / visitors) ────────────────
 
-  /** Classify a staff member as teacher vs other staff by designation text. */
-  private staffUserType(designation?: string | null): EnrollUserType {
-    return (designation ?? '').toLowerCase().includes('teacher')
-      ? 'teacher'
-      : 'staff';
+  /** Classify a staff member as teacher vs other staff by their login role. */
+  private staffUserType(role?: string | null): EnrollUserType {
+    return (role ?? '').toLowerCase() === 'teacher' ? 'teacher' : 'staff';
   }
 
   /** Search enrollable users of a given type, each resolved to its device PIN. */
@@ -442,13 +441,8 @@ export class BiometricDevicesService {
           .andWhere("st.status = 'active'")
           .orderBy('u.name', 'ASC')
           .limit(20);
-        if (type === 'teacher')
-          qb.andWhere('st.designation ILIKE :teacher', { teacher: '%teacher%' });
-        else
-          qb.andWhere(
-            '(st.designation IS NULL OR st.designation NOT ILIKE :teacher)',
-            { teacher: '%teacher%' },
-          );
+        if (type === 'teacher') qb.andWhere("u.role = 'teacher'");
+        else qb.andWhere("(u.role IS NULL OR u.role <> 'teacher')");
         if (term)
           qb.andWhere('(u.name ILIKE :like OR st.employee_id ILIKE :like)', {
             like,
@@ -524,16 +518,17 @@ export class BiometricDevicesService {
       if (type === 'teacher' || type === 'staff') {
         const st = await em.getRepository(Staff).findOne({
           where: { id, schoolId },
-          select: { id: true, employeeId: true, userId: true, designation: true },
+          select: { id: true, employeeId: true, userId: true },
         });
         if (!st) return null;
         const u = st.userId
-          ? await em
-              .getRepository(User)
-              .findOne({ where: { id: st.userId }, select: { id: true, name: true } })
+          ? await em.getRepository(User).findOne({
+              where: { id: st.userId },
+              select: { id: true, name: true, role: true },
+            })
           : null;
-        // Trust the designation for the prefix so attendance resolves correctly.
-        const resolvedType = this.staffUserType(st.designation);
+        // Classify by login role so the prefix matches attendance resolution.
+        const resolvedType = this.staffUserType(u?.role);
         return {
           id: st.id,
           userType: resolvedType,
@@ -699,16 +694,17 @@ export class BiometricDevicesService {
       });
       const staff = await em.getRepository(Staff).find({
         where: { schoolId, status: 'active' as any },
-        select: { employeeId: true, userId: true, designation: true },
+        select: { employeeId: true, userId: true },
       });
       const userIds = staff.map((s) => s.userId).filter(Boolean) as string[];
       const users = userIds.length
         ? await em.getRepository(User).find({
             where: userIds.map((uid) => ({ id: uid })),
-            select: { id: true, name: true },
+            select: { id: true, name: true, role: true },
           })
         : [];
       const nameById = new Map(users.map((u) => [u.id, u.name]));
+      const roleById = new Map(users.map((u) => [u.id, u.role]));
 
       const cmds: string[] = [];
       for (const s of students) {
@@ -718,7 +714,7 @@ export class BiometricDevicesService {
       }
       for (const st of staff) {
         const name = nameById.get(st.userId) ?? st.employeeId;
-        const type = this.staffUserType(st.designation);
+        const type = this.staffUserType(roleById.get(st.userId));
         const code = buildUserCode(type, st.employeeId);
         cmds.push(`DATA USER PIN=${code}\tName=${name}\tPri=0`);
       }
