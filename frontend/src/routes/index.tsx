@@ -14,7 +14,7 @@ import { VisitorsPage } from '@/pages/visitors/VisitorsPage';
 import { VisitsPage } from '@/pages/visitors/VisitsPage';
 import { StaffPage } from '@/pages/staff/StaffPage';
 import { StaffViewPage } from '@/pages/staff/StaffViewPage';
-import { BiometricDevicesPage } from '@/pages/biometric/BiometricDevicesPage';
+import { BiometricDevicesPage } from '@/pages/biometric-devices/BiometricDevicesPage';
 import { AcademicYearsPage } from '@/pages/setup/AcademicYearsPage';
 import { ClassesPage } from '@/pages/setup/ClassesPage';
 import { SubjectsPage } from '@/pages/setup/SubjectsPage';

@@ -32,6 +32,21 @@ export class BiometricEnrollment {
   @Column({ type: 'uuid', name: 'staff_id', nullable: true })
   staffId: string | null;
 
+  @Column({ type: 'uuid', name: 'visitor_id', nullable: true })
+  visitorId: string | null;
+
+  /** 'student' | 'teacher' | 'staff' | 'visitor' — set on admin enrollment. */
+  @Column({ type: 'varchar', length: 20, name: 'user_type', nullable: true })
+  userType: string | null;
+
+  /** Display name captured at enrollment time. */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  name: string | null;
+
+  /** 'pending' (admin queued) | 'enrolled' (template received). */
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  status: string | null;
+
   @Column({ type: 'varchar', length: 100, name: 'device_sn', nullable: true })
   deviceSn: string | null;
 

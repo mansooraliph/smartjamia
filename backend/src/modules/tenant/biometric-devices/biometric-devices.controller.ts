@@ -26,6 +26,15 @@ import {
   ListTransactionsQueryDto,
   UpdateAliasDto,
 } from './dto/biometric-query.dto';
+import {
+  BulkDeviceActionDto,
+  BulkEnrollDto,
+  BulkSetDuplicatePunchDto,
+  EnrollRemotelyDto,
+  EnrollUserDto,
+  ListEnrollUsersQueryDto,
+  SetDuplicatePunchDto,
+} from './dto/device-actions.dto';
 
 const userId = (req: Request): string =>
   ((req as any).user?.sub ?? (req as any).user?.id ?? '') as string;
@@ -54,6 +63,22 @@ export class BiometricDevicesController {
   @ApiOperation({ summary: 'List enrolled biometric templates' })
   enrollments(@Tenant() t: TenantContext, @Query() q: ListEnrollmentsQueryDto) {
     return this.svc.enrollments(t.schoolId, t.schemaName, q);
+  }
+
+  @Get('enroll/users')
+  @ApiOperation({
+    summary: 'Search enrollable users (student/teacher/staff/visitor)',
+  })
+  enrollableUsers(
+    @Tenant() t: TenantContext,
+    @Query() q: ListEnrollUsersQueryDto,
+  ) {
+    return this.svc.listEnrollableUsers(
+      t.schoolId,
+      t.schemaName,
+      q.type,
+      q.search,
+    );
   }
 
   @Get('stats')
@@ -87,6 +112,74 @@ export class BiometricDevicesController {
     return this.svc.updateAlias(t.schoolId, id, dto.alias);
   }
 
+  // ── Bulk actions ────────────────────────────────────────────────────────────
+  // NOTE: these literal `bulk/*` routes are declared BEFORE the `:id/*` routes
+  // so Express does not match `/bulk/...` as `:id = "bulk"`.
+
+  @Post('bulk/restart')
+  @ApiOperation({ summary: 'Restart multiple devices' })
+  bulkRestart(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Body() dto: BulkDeviceActionDto,
+  ) {
+    return this.svc.bulkRestart(dto.deviceIds, t.schoolId, userId(req));
+  }
+
+  @Post('bulk/read-info')
+  @ApiOperation({ summary: 'Send INFO to multiple devices' })
+  bulkReadInfo(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Body() dto: BulkDeviceActionDto,
+  ) {
+    return this.svc.bulkReadInfo(dto.deviceIds, t.schoolId, userId(req));
+  }
+
+  @Post('bulk/set-duplicate-punch')
+  @ApiOperation({ summary: 'Set duplicate-punch interval on multiple devices' })
+  bulkSetDuplicatePunch(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Body() dto: BulkSetDuplicatePunchDto,
+  ) {
+    return this.svc.bulkSetDuplicatePunch(
+      dto.deviceIds,
+      t.schoolId,
+      dto.seconds,
+      userId(req),
+    );
+  }
+
+  @Post('bulk/enroll')
+  @ApiOperation({ summary: 'Trigger remote enrollment on multiple devices' })
+  bulkEnroll(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Body() dto: BulkEnrollDto,
+  ) {
+    return this.svc.bulkEnrollRemotely(
+      dto.deviceIds,
+      t.schoolId,
+      t.schemaName,
+      dto,
+      userId(req),
+    );
+  }
+
+  @Post('enrollments')
+  @ApiOperation({
+    summary:
+      'Enroll a user (student/teacher/staff/visitor) onto selected devices',
+  })
+  enrollUser(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Body() dto: EnrollUserDto,
+  ) {
+    return this.svc.enrollUser(t.schoolId, t.schemaName, dto, userId(req));
+  }
+
   @Post(':id/restart')
   @ApiOperation({ summary: 'Queue a reboot command' })
   restart(
@@ -94,7 +187,50 @@ export class BiometricDevicesController {
     @Tenant() t: TenantContext,
     @Param('id', new ParseUUIDPipe()) id: string,
   ) {
-    return this.svc.restart(t.schoolId, id, userId(req));
+    return this.svc.restartDevice(t.schoolId, id, userId(req));
+  }
+
+  @Post(':id/read-info')
+  @ApiOperation({ summary: 'Send an INFO command to a single device' })
+  readInfo(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Param('id', new ParseUUIDPipe()) id: string,
+  ) {
+    return this.svc.readDeviceInfo(t.schoolId, id, userId(req));
+  }
+
+  @Post(':id/set-duplicate-punch')
+  @ApiOperation({ summary: 'Set duplicate-punch interval on a single device' })
+  setDuplicatePunch(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: SetDuplicatePunchDto,
+  ) {
+    return this.svc.setDuplicatePunch(
+      t.schoolId,
+      id,
+      dto.seconds,
+      userId(req),
+    );
+  }
+
+  @Post(':id/enroll')
+  @ApiOperation({ summary: 'Trigger remote enrollment on a single device' })
+  enroll(
+    @Req() req: Request,
+    @Tenant() t: TenantContext,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: EnrollRemotelyDto,
+  ) {
+    return this.svc.enrollRemotely(
+      t.schoolId,
+      t.schemaName,
+      id,
+      dto,
+      userId(req),
+    );
   }
 
   @Post(':id/sync-users')

@@ -1,21 +1,24 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { Brackets, DataSource, IsNull, Repository } from 'typeorm';
+import { Brackets, DataSource, In, IsNull, Repository } from 'typeorm';
 import { BiometricDevice } from '../../../database/master/biometric-device.entity';
 import { BiometricDeviceCommand } from '../../../database/master/biometric-device-command.entity';
 import { School } from '../../../database/master/school.entity';
 import { paginate } from '../../../common/dto/pagination.dto';
 import {
+  BulkActionResult,
   ListCommandsQueryDto,
   ListDevicesQueryDto,
 } from './dto/biometric-device.dto';
 
 @Injectable()
 export class BiometricDevicesAdminService {
+  private readonly logger = new Logger(BiometricDevicesAdminService.name);
   private readonly deviceRepo: Repository<BiometricDevice>;
   private readonly commandRepo: Repository<BiometricDeviceCommand>;
   private readonly schoolRepo: Repository<School>;
@@ -153,6 +156,81 @@ export class BiometricDevicesAdminService {
       createdByUserId: adminId ?? null,
     });
     return { queued: true, sn: device.sn };
+  }
+
+  /** Read device info — alias of queueSync, exposed as its own endpoint. */
+  async readInfo(id: string, adminId?: string) {
+    return this.queueSync(id, adminId);
+  }
+
+  // ── Bulk actions ────────────────────────────────────────────────────────────
+
+  async bulkRestart(
+    deviceIds: string[],
+    adminId?: string,
+  ): Promise<BulkActionResult> {
+    return this.runBulk(deviceIds, 'REBOOT', adminId);
+  }
+
+  async bulkReadInfo(
+    deviceIds: string[],
+    adminId?: string,
+  ): Promise<BulkActionResult> {
+    return this.runBulk(deviceIds, 'INFO', adminId);
+  }
+
+  /**
+   * Queue a command to many devices by id. Deactivated devices are skipped;
+   * a per-device failure never stops the rest.
+   */
+  private async runBulk(
+    deviceIds: string[],
+    command: string,
+    adminId?: string,
+  ): Promise<BulkActionResult> {
+    const devices = await this.deviceRepo.find({
+      where: { id: In(deviceIds) },
+    });
+    const label = (d: BiometricDevice) => d.alias || d.sn;
+    const rows: Partial<BiometricDeviceCommand>[] = [];
+    const failed: string[] = [];
+
+    for (const device of devices) {
+      if (device.deactivatedAt) {
+        this.logger.warn(`Skipping deactivated device ${label(device)}`);
+        failed.push(label(device));
+        continue;
+      }
+      rows.push({
+        sn: device.sn,
+        schoolId: device.schoolId,
+        command,
+        status: 0,
+        createdByUserId: adminId ?? null,
+      });
+    }
+
+    try {
+      if (rows.length) await this.commandRepo.insert(rows);
+    } catch (err) {
+      this.logger.error(`Bulk insert failed: ${(err as Error).message}`);
+      return {
+        success_count: 0,
+        failed_count: deviceIds.length,
+        failed_devices: devices.map(label),
+        message: 'Failed to queue commands',
+      };
+    }
+
+    const successCount = rows.length;
+    const parts = [`Command queued on ${successCount} device(s)`];
+    if (failed.length) parts.push(`${failed.length} failed`);
+    return {
+      success_count: successCount,
+      failed_count: failed.length,
+      failed_devices: failed,
+      message: parts.join(', '),
+    };
   }
 
   async listCommands(q: ListCommandsQueryDto) {

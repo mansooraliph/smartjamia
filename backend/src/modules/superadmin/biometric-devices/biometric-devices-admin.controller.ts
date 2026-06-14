@@ -17,6 +17,7 @@ import { SuperadminGuard } from '../../../common/guards/superadmin.guard';
 import { BiometricDevicesAdminService } from './biometric-devices-admin.service';
 import {
   AssignDeviceDto,
+  BulkDeviceActionDto,
   DeactivateDeviceDto,
   ListCommandsQueryDto,
   ListDevicesQueryDto,
@@ -100,10 +101,30 @@ export class BiometricDevicesAdminController {
     return this.svc.reactivate(id);
   }
 
+  // Literal `bulk/*` routes declared before `:id/*` so `/bulk/...` is not
+  // matched as `:id = "bulk"`.
+  @Post('bulk/restart')
+  @ApiOperation({ summary: 'Restart multiple devices' })
+  bulkRestart(@Req() req: Request, @Body() dto: BulkDeviceActionDto) {
+    return this.svc.bulkRestart(dto.deviceIds, adminId(req));
+  }
+
+  @Post('bulk/read-info')
+  @ApiOperation({ summary: 'Send INFO to multiple devices' })
+  bulkReadInfo(@Req() req: Request, @Body() dto: BulkDeviceActionDto) {
+    return this.svc.bulkReadInfo(dto.deviceIds, adminId(req));
+  }
+
   @Post(':id/restart')
   @ApiOperation({ summary: 'Queue a reboot command' })
   restart(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string) {
     return this.svc.queueRestart(id, adminId(req));
+  }
+
+  @Post(':id/read-info')
+  @ApiOperation({ summary: 'Send an INFO command to a single device' })
+  readInfo(@Req() req: Request, @Param('id', new ParseUUIDPipe()) id: string) {
+    return this.svc.readInfo(id, adminId(req));
   }
 
   @Post(':id/sync')

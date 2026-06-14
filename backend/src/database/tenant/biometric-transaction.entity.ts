@@ -42,6 +42,13 @@ export class BiometricTransaction {
   @Column({ type: 'uuid', name: 'staff_id', nullable: true })
   staffId: string | null;
 
+  @Column({ type: 'uuid', name: 'visitor_id', nullable: true })
+  visitorId: string | null;
+
+  /** 'student' | 'teacher' | 'staff' | 'visitor' — resolved from the PIN. */
+  @Column({ type: 'varchar', length: 20, name: 'user_type', nullable: true })
+  userType: string | null;
+
   /** Raw time reported by the device. */
   @Column({ type: 'timestamp', name: 'actual_punch_time' })
   actualPunchTime: Date;

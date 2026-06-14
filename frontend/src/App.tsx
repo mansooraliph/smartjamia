@@ -1,5 +1,6 @@
 import { Suspense } from 'react';
 import { AppRoutes } from './routes';
+import { ToastContainer } from '@/components/ui/Toast';
 
 export default function App() {
   return (
@@ -11,6 +12,7 @@ export default function App() {
       }
     >
       <AppRoutes />
+      <ToastContainer />
     </Suspense>
   );
 }

@@ -1,6 +1,9 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  IsArray,
   IsBoolean,
   IsOptional,
   IsString,
@@ -21,6 +24,21 @@ export class DeactivateDeviceDto {
   @IsString()
   @MaxLength(500)
   reason: string;
+}
+
+export class BulkDeviceActionDto {
+  @IsArray()
+  @IsUUID('4', { each: true })
+  @ArrayMinSize(1)
+  @ArrayMaxSize(50)
+  deviceIds: string[];
+}
+
+export interface BulkActionResult {
+  success_count: number;
+  failed_count: number;
+  failed_devices: string[];
+  message: string;
 }
 
 export class ListDevicesQueryDto extends PaginationDto {

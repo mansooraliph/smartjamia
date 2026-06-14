@@ -9,11 +9,15 @@ import { BiometricTransaction } from '../../database/tenant/biometric-transactio
 import { BiometricEnrollment } from '../../database/tenant/biometric-enrollment.entity';
 import { Student } from '../../database/tenant/student.entity';
 import { Staff } from '../../database/tenant/staff.entity';
+import { Visitor } from '../../database/tenant/visitor.entity';
 import { TenantSchemaService } from '../../common/tenant/tenant-schema.service';
+import { EnrollUserType, parseUserCode } from './user-code.util';
 
 interface ResolvedUser {
   studentId: string | null;
   staffId: string | null;
+  visitorId: string | null;
+  userType: EnrollUserType | null;
 }
 
 /**
@@ -201,13 +205,22 @@ export class IclockService {
           const userCode = r[0];
           const actual = this.parseDeviceTime(r[1]);
           const punchState = Number(r[2] ?? 0) || 0;
-          const ru = resolved.get(userCode) ?? { studentId: null, staffId: null };
+          const ru =
+            resolved.get(userCode) ??
+            ({
+              studentId: null,
+              staffId: null,
+              visitorId: null,
+              userType: null,
+            } as ResolvedUser);
           return {
             schoolId,
             deviceSn: sn,
             userCode,
             studentId: ru.studentId,
             staffId: ru.staffId,
+            visitorId: ru.visitorId,
+            userType: ru.userType,
             actualPunchTime: actual,
             punchTime: actual,
             punchState,
@@ -271,6 +284,8 @@ export class IclockService {
           tmp: kv['Tmp'] ?? null,
           studentId: ru?.studentId ?? null,
           staffId: ru?.staffId ?? null,
+          visitorId: ru?.visitorId ?? null,
+          userType: ru?.userType ?? null,
         });
       }
     });
@@ -316,6 +331,8 @@ export class IclockService {
           image: kv['Content'] ?? kv['FileName'] ?? null,
           studentId: ru?.studentId ?? null,
           staffId: ru?.staffId ?? null,
+          visitorId: ru?.visitorId ?? null,
+          userType: ru?.userType ?? null,
         });
       }
     });
@@ -446,7 +463,11 @@ export class IclockService {
     return school?.schemaName ?? null;
   }
 
-  /** Resolve device PINs to students (admission #) or staff (employee id). */
+  /**
+   * Resolve device PINs to a student / staff / visitor. PINs carry a one-letter
+   * type prefix (see user-code.util). Codes without a recognised prefix fall
+   * back to a raw admission#/employee-id match for backward compatibility.
+   */
   private async resolveUsers(
     em: EntityManager,
     schoolId: string,
@@ -454,20 +475,92 @@ export class IclockService {
   ): Promise<Map<string, ResolvedUser>> {
     const map = new Map<string, ResolvedUser>();
     if (!userCodes.length) return map;
-    const students = await em.getRepository(Student).find({
-      where: { schoolId, admissionNumber: In(userCodes) },
-      select: { id: true, admissionNumber: true },
-    });
-    for (const s of students)
-      map.set(s.admissionNumber, { studentId: s.id, staffId: null });
-    const staff = await em.getRepository(Staff).find({
-      where: { schoolId, employeeId: In(userCodes) },
-      select: { id: true, employeeId: true },
-    });
-    for (const st of staff) {
-      if (!map.has(st.employeeId))
-        map.set(st.employeeId, { studentId: null, staffId: st.id });
+
+    // Bucket codes by decoded prefix; remember which base maps to which raw code.
+    const studentBases = new Map<string, string>(); // base → raw code
+    const staffBases = new Map<string, string[]>(); // base → raw codes (T or E)
+    const visitorCodes: string[] = [];
+    const legacy: string[] = [];
+
+    for (const raw of userCodes) {
+      const parsed = parseUserCode(raw);
+      if (!parsed) {
+        legacy.push(raw);
+        continue;
+      }
+      if (parsed.type === 'student') {
+        studentBases.set(parsed.base, raw);
+      } else if (parsed.type === 'teacher' || parsed.type === 'staff') {
+        const arr = staffBases.get(parsed.base) ?? [];
+        arr.push(raw);
+        staffBases.set(parsed.base, arr);
+      } else if (parsed.type === 'visitor') {
+        visitorCodes.push(raw);
+      }
     }
+    // Legacy codes: try both a student and a staff raw match.
+    for (const raw of legacy) {
+      studentBases.set(raw, raw);
+      const arr = staffBases.get(raw) ?? [];
+      arr.push(raw);
+      staffBases.set(raw, arr);
+    }
+
+    // Students.
+    if (studentBases.size) {
+      const students = await em.getRepository(Student).find({
+        where: { schoolId, admissionNumber: In([...studentBases.keys()]) },
+        select: { id: true, admissionNumber: true },
+      });
+      for (const s of students) {
+        const raw = studentBases.get(s.admissionNumber);
+        if (raw)
+          map.set(raw, {
+            studentId: s.id,
+            staffId: null,
+            visitorId: null,
+            userType: 'student',
+          });
+      }
+    }
+
+    // Staff (teacher + non-teaching share the staff table).
+    if (staffBases.size) {
+      const staff = await em.getRepository(Staff).find({
+        where: { schoolId, employeeId: In([...staffBases.keys()]) },
+        select: { id: true, employeeId: true },
+      });
+      for (const st of staff) {
+        for (const raw of staffBases.get(st.employeeId) ?? []) {
+          if (map.has(raw)) continue; // a student match already won this code
+          const parsed = parseUserCode(raw);
+          map.set(raw, {
+            studentId: null,
+            staffId: st.id,
+            visitorId: null,
+            userType: parsed?.type === 'teacher' ? 'teacher' : 'staff',
+          });
+        }
+      }
+    }
+
+    // Visitors — resolved via the enrollment mapping (userCode → visitorId).
+    if (visitorCodes.length) {
+      const rows = await em.getRepository(BiometricEnrollment).find({
+        where: { schoolId, userCode: In(visitorCodes) },
+        select: { userCode: true, visitorId: true },
+      });
+      for (const r of rows) {
+        if (r.visitorId && !map.has(r.userCode))
+          map.set(r.userCode, {
+            studentId: null,
+            staffId: null,
+            visitorId: r.visitorId,
+            userType: 'visitor',
+          });
+      }
+    }
+
     return map;
   }
 
