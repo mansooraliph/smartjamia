@@ -107,40 +107,58 @@ export class IclockService {
 
   /** POST /iclock/devicecmd — device reports command results. */
   async handleDeviceCommands(rawBody: string): Promise<string> {
-    const lines = rawBody.split('\n').map((l) => l.trim()).filter(Boolean);
-    const successIds: string[] = [];
-    const errorMap = new Map<number, string[]>();
-    let hasInfo = false;
+    try {
+      const lines = rawBody.split('\n').map((l) => l.trim()).filter(Boolean);
+      const successIds: string[] = [];
+      const errorMap = new Map<number, string[]>();
+      let hasInfo = false;
 
-    for (const line of lines) {
-      const kv = this.parseKv(line);
-      const id = kv['ID'];
-      if (!id) continue;
-      if ((kv['CMD'] || '').toUpperCase() === 'INFO') hasInfo = true;
-      const ret = Number(kv['Return'] ?? kv['return'] ?? 0);
-      if (ret === 0) {
-        successIds.push(id);
-      } else {
-        const arr = errorMap.get(ret) ?? [];
-        arr.push(id);
-        errorMap.set(ret, arr);
+      for (const line of lines) {
+        const kv = this.parseKv(line);
+        const id = kv['ID'];
+        // Only our own command IDs are UUIDs; ignore anything else so a bad
+        // ID can't blow up the DB query (invalid uuid syntax).
+        if (!id || !this.isUuid(id)) {
+          if (id) {
+            this.logger.warn(`devicecmd: ignoring non-UUID command ID "${id}"`);
+          }
+          continue;
+        }
+        if ((kv['CMD'] || '').toUpperCase() === 'INFO') hasInfo = true;
+        const ret = Number(kv['Return'] ?? kv['return'] ?? 0);
+        if (ret === 0) {
+          successIds.push(id);
+        } else {
+          const arr = errorMap.get(ret) ?? [];
+          arr.push(id);
+          errorMap.set(ret, arr);
+        }
       }
-    }
 
-    if (successIds.length) {
-      await this.commandRepo.update(
-        { id: In(successIds) },
-        { status: 1, deviceReturnCode: 0 },
+      if (successIds.length) {
+        await this.commandRepo.update(
+          { id: In(successIds) },
+          { status: 1, deviceReturnCode: 0 },
+        );
+      }
+      for (const [code, ids] of errorMap) {
+        await this.commandRepo.update(
+          { id: In(ids) },
+          { status: 2, deviceReturnCode: code },
+        );
+      }
+      if (hasInfo) await this.updateDeviceInfo(rawBody).catch(() => undefined);
+      return 'OK';
+    } catch (err) {
+      // Never 500 a device — log the cause and acknowledge so it doesn't retry-storm.
+      this.logger.error(
+        `devicecmd failed: ${(err as Error).message}\nBODY: ${(
+          rawBody || ''
+        ).slice(0, 2000)}`,
+        (err as Error).stack,
       );
+      return 'OK';
     }
-    for (const [code, ids] of errorMap) {
-      await this.commandRepo.update(
-        { id: In(ids) },
-        { status: 2, deviceReturnCode: code },
-      );
-    }
-    if (hasInfo) await this.updateDeviceInfo(rawBody).catch(() => undefined);
-    return 'OK';
   }
 
   /** POST /iclock/cdata — device pushes attendance / biometric data. */
@@ -580,6 +598,12 @@ export class IclockService {
     } else {
       await repo.save(repo.create({ ...data, schoolId, deviceSn, index }));
     }
+  }
+
+  private isUuid(s: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      s,
+    );
   }
 
   private parseKv(line: string): Record<string, string> {

@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Logger,
   Post,
   Query,
   Req,
@@ -20,6 +21,8 @@ import { IclockService } from './iclock.service';
 @ApiExcludeController()
 @Controller()
 export class IclockController {
+  private readonly logger = new Logger(IclockController.name);
+
   constructor(private readonly iclock: IclockService) {}
 
   private send(res: Response, body: string) {
@@ -28,22 +31,53 @@ export class IclockController {
     res.send(body);
   }
 
+  /**
+   * Run a protocol handler and always reply with plain text. If the handler
+   * throws, log the cause + request context and return a device-safe fallback
+   * so the terminal never sees a 500 (which it would just retry-storm on).
+   */
+  private async safe(
+    res: Response,
+    req: Request,
+    label: string,
+    fn: () => Promise<string>,
+    fallback = 'OK',
+  ) {
+    try {
+      this.send(res, await fn());
+    } catch (err) {
+      this.logger.error(
+        `${label} failed [${req.method} ${req.originalUrl}]: ${
+          (err as Error).message
+        }`,
+        (err as Error).stack,
+      );
+      this.send(res, fallback);
+    }
+  }
+
   @Get(['/iclock/cdata', '/iclock/cdata.aspx'])
   async handshake(
     @Query('SN') sn: string,
     @Query() query: Record<string, string>,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
-    this.send(res, await this.iclock.handleHandshake(sn, query));
+    await this.safe(res, req, 'handshake', () =>
+      this.iclock.handleHandshake(sn, query),
+    );
   }
 
   @Get(['/iclock/registry', '/iclock/registry.aspx'])
   async registry(
     @Query('SN') sn: string,
     @Query() query: Record<string, string>,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
-    this.send(res, await this.iclock.handleRegistry(sn, query));
+    await this.safe(res, req, 'registry', () =>
+      this.iclock.handleRegistry(sn, query),
+    );
   }
 
   @Post(['/iclock/cdata', '/iclock/cdata.aspx'])
@@ -56,12 +90,20 @@ export class IclockController {
     const rawBody = Buffer.isBuffer(req.body)
       ? req.body.toString()
       : (req.rawBody?.toString() ?? '');
-    this.send(res, await this.iclock.handleReceiveRecords(sn, table, rawBody));
+    await this.safe(res, req, `cdata(${table ?? ''})`, () =>
+      this.iclock.handleReceiveRecords(sn, table, rawBody),
+    );
   }
 
   @Get(['/iclock/getrequest', '/iclock/getrequest.aspx'])
-  async getRequest(@Query('SN') sn: string, @Res() res: Response) {
-    this.send(res, await this.iclock.handleGetRequest(sn));
+  async getRequest(
+    @Query('SN') sn: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    await this.safe(res, req, 'getrequest', () =>
+      this.iclock.handleGetRequest(sn),
+    );
   }
 
   @Post(['/iclock/devicecmd', '/iclock/devicecmd.aspx'])
@@ -72,6 +114,8 @@ export class IclockController {
     const rawBody = Buffer.isBuffer(req.body)
       ? req.body.toString()
       : (req.rawBody?.toString() ?? '');
-    this.send(res, await this.iclock.handleDeviceCommands(rawBody));
+    await this.safe(res, req, 'devicecmd', () =>
+      this.iclock.handleDeviceCommands(rawBody),
+    );
   }
 }
