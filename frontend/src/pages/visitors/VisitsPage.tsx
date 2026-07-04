@@ -240,7 +240,7 @@ export function VisitsPage() {
               <div className="leading-tight">
                 <div className="text-sm text-slate-900">
                   {v.student
-                    ? `${v.student.firstName} ${v.student.lastName}`
+                    ? v.student.studentName
                     : '—'}
                 </div>
                 <div className="text-xs text-slate-500">
@@ -499,7 +499,7 @@ function RequestModal({
               <option key={v.id} value={v.id} disabled={v.isBlacklisted}>
                 {v.name} · {v.mobile}
                 {v.student
-                  ? ` → ${v.student.firstName} ${v.student.lastName}`
+                  ? ` → ${v.student.studentName}`
                   : ''}
                 {v.isBlacklisted ? ' (blacklisted)' : ''}
               </option>
@@ -509,8 +509,7 @@ function RequestModal({
             <p className="mt-1 text-xs text-slate-500">
               Visiting{' '}
               <span className="font-medium text-slate-700">
-                {selectedVisitor.student.firstName}{' '}
-                {selectedVisitor.student.lastName}
+                {selectedVisitor.student.studentName}
               </span>{' '}
               ({selectedVisitor.student.admissionNumber})
             </p>

@@ -98,15 +98,10 @@ export class CreateStudentDto {
   @Length(1, 50)
   admissionNumber: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Aisha Khan' })
   @IsString()
   @Length(1, 100)
-  firstName: string;
-
-  @ApiProperty()
-  @IsString()
-  @Length(1, 100)
-  lastName: string;
+  studentName: string;
 
   @ApiProperty({ example: '2015-08-15' })
   @IsDateString()

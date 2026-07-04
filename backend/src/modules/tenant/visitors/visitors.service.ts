@@ -80,8 +80,7 @@ export class VisitorsService {
           ? {
               id: s.id,
               admissionNumber: s.admissionNumber,
-              firstName: s.firstName,
-              lastName: s.lastName,
+              studentName: s.studentName,
             }
           : null,
       };
@@ -111,7 +110,7 @@ export class VisitorsService {
         name: v.name,
         relation: v.relation ?? '',
         student: v.student
-          ? `${v.student.firstName} ${v.student.lastName}`
+          ? v.student.studentName
           : '',
         admissionNumber: v.student?.admissionNumber ?? '',
         gender: v.gender ?? '',

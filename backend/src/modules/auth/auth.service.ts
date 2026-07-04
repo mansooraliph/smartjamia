@@ -175,7 +175,7 @@ export class AuthService {
         return {
           user,
           refId: student.id,
-          name: `${student.firstName} ${student.lastName}`,
+          name: student.studentName,
         };
       },
     );

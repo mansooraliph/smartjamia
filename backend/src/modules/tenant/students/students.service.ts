@@ -28,9 +28,8 @@ export interface StudentListOpts {
 }
 
 const STUDENT_SORT: Record<string, string> = {
-  name: 's.firstName',
-  firstName: 's.firstName',
-  lastName: 's.lastName',
+  name: 's.studentName',
+  studentName: 's.studentName',
   admissionNumber: 's.admissionNumber',
   admissionDate: 's.admissionDate',
   dateOfBirth: 's.dateOfBirth',
@@ -53,7 +52,14 @@ export class StudentsService {
       .where('s.schoolId = :schoolId', { schoolId })
       .andWhere('s.deletedAt IS NULL');
 
-    if (opts.academicYearId || opts.classId || opts.sectionId) {
+    const sortBy = opts.sortBy ?? '';
+    const filterByEnrollment = !!(
+      opts.academicYearId ||
+      opts.classId ||
+      opts.sectionId
+    );
+
+    if (filterByEnrollment) {
       qb.innerJoin(
         StudentEnrollment,
         'e',
@@ -64,19 +70,40 @@ export class StudentsService {
       if (opts.classId) qb.andWhere('e.classId = :cid', { cid: opts.classId });
       if (opts.sectionId)
         qb.andWhere('e.sectionId = :sid', { sid: opts.sectionId });
+    } else if (sortBy === 'rollNumber') {
+      // Sorting by roll without a class/year filter — attach the active
+      // enrollment (left join keeps unenrolled students in the list).
+      qb.leftJoin(
+        StudentEnrollment,
+        'e',
+        "e.studentId = s.id AND e.schoolId = s.schoolId AND e.status = 'active'",
+      );
     }
     if (opts.status) qb.andWhere('s.status = :status', { status: opts.status });
     if (opts.search) {
       const term = `%${opts.search.trim()}%`;
       qb.andWhere(
-        '(s.firstName ILIKE :term OR s.lastName ILIKE :term OR s.admissionNumber ILIKE :term)',
+        '(s.studentName ILIKE :term OR s.admissionNumber ILIKE :term)',
         { term },
       );
     }
 
-    const sortCol = STUDENT_SORT[opts.sortBy ?? ''] ?? 's.createdAt';
     const dir = opts.sortOrder === 'asc' ? 'ASC' : 'DESC';
-    qb.orderBy(sortCol, dir).addOrderBy('s.id', 'ASC');
+    if (sortBy === 'rollNumber') {
+      // Natural numeric ordering: "2" before "10"; non-numeric/blank rolls last.
+      // Ordered via a named select alias — TypeORM mis-parses a raw expression
+      // containing a "." in orderBy() (it treats the prefix as a table alias).
+      qb.addSelect(
+        "NULLIF(regexp_replace(COALESCE(e.roll_number, ''), '[^0-9]', '', 'g'), '')::int",
+        'roll_sort',
+      )
+        .orderBy('roll_sort', dir, 'NULLS LAST')
+        .addOrderBy('e.rollNumber', dir)
+        .addOrderBy('s.id', 'ASC');
+    } else {
+      const sortCol = STUDENT_SORT[sortBy] ?? 's.createdAt';
+      qb.orderBy(sortCol, dir).addOrderBy('s.id', 'ASC');
+    }
     return qb;
   }
 
@@ -101,9 +128,12 @@ export class StudentsService {
       const page = Math.max(1, opts.page ?? 1);
       const limit = Math.min(200, Math.max(1, opts.limit ?? 20));
       const qb = this.buildListQuery(em, schoolId, opts);
+      // limit/offset (not take/skip) so TypeORM skips its distinct-id subquery,
+      // which mis-handles computed ORDER BY. Safe here: the enrollment join is
+      // 1:1 (a single active enrollment), so rows are never multiplied.
       const [students, total] = await qb
-        .skip((page - 1) * limit)
-        .take(limit)
+        .offset((page - 1) * limit)
+        .limit(limit)
         .getManyAndCount();
       const items = await this.attachEnrollments(em, schoolId, students);
       return paginate(items, total, page, limit);
@@ -114,7 +144,7 @@ export class StudentsService {
   listAll(schemaName: string, schoolId: string, opts: StudentListOpts = {}) {
     return this.tenant.runInSchema(schemaName, async (em) => {
       const qb = this.buildListQuery(em, schoolId, opts);
-      const students = await qb.take(10000).getMany();
+      const students = await qb.limit(10000).getMany();
       return this.attachEnrollments(em, schoolId, students);
     });
   }
@@ -123,7 +153,7 @@ export class StudentsService {
   exportRows(schemaName: string, schoolId: string, opts: StudentListOpts = {}) {
     return this.tenant.runInSchema(schemaName, async (em) => {
       const qb = this.buildListQuery(em, schoolId, opts);
-      const students = await qb.take(10000).getMany();
+      const students = await qb.limit(10000).getMany();
       const withEnrol = await this.attachEnrollments(em, schoolId, students);
       const classes = await em
         .getRepository(ClassEntity)
@@ -135,8 +165,7 @@ export class StudentsService {
       const sMap = new Map(sections.map((s) => [s.id, s.name]));
       return withEnrol.map((s) => ({
         admissionNumber: s.admissionNumber,
-        firstName: s.firstName,
-        lastName: s.lastName,
+        studentName: s.studentName,
         gender: s.gender,
         dateOfBirth: s.dateOfBirth,
         bloodGroup: s.bloodGroup ?? '',
@@ -177,8 +206,7 @@ export class StudentsService {
         .select([
           's.id',
           's.admissionNumber',
-          's.firstName',
-          's.lastName',
+          's.studentName',
           's.status',
         ])
         .where('s.schoolId = :schoolId', { schoolId })
@@ -187,12 +215,12 @@ export class StudentsService {
       if (opts.search) {
         const term = `%${opts.search.trim()}%`;
         qb.andWhere(
-          '(s.firstName ILIKE :term OR s.lastName ILIKE :term OR s.admissionNumber ILIKE :term)',
+          '(s.studentName ILIKE :term OR s.admissionNumber ILIKE :term)',
           { term },
         );
       }
       return qb
-        .orderBy('s.firstName', 'ASC')
+        .orderBy('s.studentName', 'ASC')
         .take(Math.min(100, opts.limit ?? 50))
         .getMany();
     });
@@ -226,8 +254,7 @@ export class StudentsService {
         studentRepo.create({
           schoolId,
           admissionNumber: dto.admissionNumber,
-          firstName: dto.firstName,
-          lastName: dto.lastName,
+          studentName: dto.studentName,
           dateOfBirth: new Date(dto.dateOfBirth),
           gender: dto.gender,
           bloodGroup: dto.bloodGroup ?? null,
@@ -319,8 +346,7 @@ export class StudentsService {
       // (academicYearId/classId/sectionId/rollNumber) onto the Student entity.
       const profileKeys = [
         'admissionNumber',
-        'firstName',
-        'lastName',
+        'studentName',
         'gender',
         'bloodGroup',
         'religion',
@@ -363,6 +389,56 @@ export class StudentsService {
       if (!s) throw new NotFoundException('Student not found');
       await repo.softRemove(s);
       return { deleted: true, id };
+    });
+  }
+
+  /**
+   * Permanently delete EVERY student for the school AND all rows linked to them
+   * (enrollments, attendance, marks, fees, parents, documents, …). This is a
+   * hard delete — unlike single-student soft-delete — so admission numbers are
+   * freed for a clean re-import. Runs inside runInSchema's transaction, so it is
+   * all-or-nothing. Restricted to admins; the UI requires a type-to-confirm.
+   */
+  removeAll(schemaName: string, schoolId: string) {
+    return this.tenant.runInSchema(schemaName, async (em) => {
+      // Every student-linked table carries a `student_id` column (discovered
+      // dynamically so new tables are covered automatically). No FK constraints
+      // exist, so order is irrelevant; we scope by school_id (shared_pool is
+      // multi-tenant) and only touch rows actually tied to a student.
+      const childTables: { table_name: string }[] = await em.query(
+        `SELECT table_name FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND column_name = 'student_id'
+           AND table_name <> 'students'`,
+      );
+      let related = 0;
+      for (const { table_name } of childTables) {
+        // Count first (em.query's return shape varies for DELETE), then delete
+        // in the same transaction so the tally is exact.
+        const cnt = await em.query(
+          `SELECT count(*)::int AS n FROM "${table_name}"
+           WHERE school_id = $1 AND student_id IS NOT NULL`,
+          [schoolId],
+        );
+        const n: number = cnt?.[0]?.n ?? 0;
+        if (n > 0) {
+          await em.query(
+            `DELETE FROM "${table_name}"
+             WHERE school_id = $1 AND student_id IS NOT NULL`,
+            [schoolId],
+          );
+          related += n;
+        }
+      }
+      // Hard-delete the students themselves (bypasses soft-delete → frees the
+      // admission numbers held by the unique (school_id, admission_number) index).
+      const del = await em
+        .getRepository(Student)
+        .createQueryBuilder()
+        .delete()
+        .where('schoolId = :schoolId', { schoolId })
+        .execute();
+      return { deleted: del.affected ?? 0, related };
     });
   }
 

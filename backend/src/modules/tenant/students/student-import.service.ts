@@ -12,8 +12,7 @@ const GENDERS = new Set(['male', 'female', 'other']);
 // Canonical column → accepted header aliases (lower-cased, spaces/underscores stripped).
 const HEADER_ALIASES: Record<string, string[]> = {
   admissionNumber: ['admissionnumber', 'admissionno', 'admno', 'admission'],
-  firstName: ['firstname', 'first'],
-  lastName: ['lastname', 'last', 'surname'],
+  studentName: ['studentname', 'name', 'fullname', 'firstname', 'first'],
   dateOfBirth: ['dateofbirth', 'dob', 'birthdate'],
   gender: ['gender', 'sex'],
   admissionDate: ['admissiondate', 'doa', 'dateofadmission'],
@@ -35,17 +34,96 @@ const HEADER_ALIASES: Record<string, string[]> = {
   rollNumber: ['rollnumber', 'roll', 'rollno'],
 };
 
+// Canonical DB fields the importer can fill, with a human label and whether a
+// value is mandatory. Order drives the mapping UI. `admissionNumber` is optional
+// — when its cell is blank the importer auto-generates ADMYYYYNNN.
+export const IMPORT_FIELDS: ImportField[] = [
+  { key: 'admissionNumber', label: 'Admission Number', required: false },
+  { key: 'studentName', label: 'Student Name', required: true },
+  { key: 'dateOfBirth', label: 'Date of Birth', required: true },
+  { key: 'gender', label: 'Gender', required: true },
+  { key: 'admissionDate', label: 'Admission Date', required: false },
+  { key: 'bloodGroup', label: 'Blood Group', required: false },
+  { key: 'religion', label: 'Religion', required: false },
+  { key: 'caste', label: 'Caste', required: false },
+  { key: 'aadharNumber', label: 'Aadhaar Number', required: false },
+  { key: 'mobileCountryCode', label: 'Mobile Country Code', required: false },
+  { key: 'mobile', label: 'Mobile', required: false },
+  { key: 'whatsappCountryCode', label: 'WhatsApp Country Code', required: false },
+  { key: 'whatsapp', label: 'WhatsApp', required: false },
+  { key: 'address', label: 'Address', required: false },
+  { key: 'city', label: 'City', required: false },
+  { key: 'state', label: 'State', required: false },
+  { key: 'pincode', label: 'Pincode', required: false },
+  { key: 'previousSchool', label: 'Previous School', required: false },
+  { key: 'className', label: 'Class (for enrollment)', required: false },
+  { key: 'sectionName', label: 'Section (for enrollment)', required: false },
+  { key: 'rollNumber', label: 'Roll Number', required: false },
+];
+
+/** Lower-case a header and strip spaces/underscores for tolerant matching. */
+function normalizeHeader(s: string): string {
+  return String(s ?? '')
+    .toLowerCase()
+    .replace(/[\s_]/g, '');
+}
+
+/**
+ * Identity key for duplicate detection: normalized name + date of birth.
+ * `dob` may be a Date (from the DB) or an ISO string (from a parsed row);
+ * both collapse to YYYY-MM-DD.
+ */
+function nameDobKey(name: string, dob: string | Date | null): string {
+  const normName = String(name ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  let dobStr = '';
+  if (dob instanceof Date) dobStr = dob.toISOString().slice(0, 10);
+  else if (typeof dob === 'string') dobStr = dob.slice(0, 10);
+  return `${normName}|${dobStr}`;
+}
+
+export interface ImportField {
+  key: string;
+  label: string;
+  required: boolean;
+}
+
+// User-chosen (or auto-suggested) mapping: canonical field key → the exact
+// Excel header text that supplies it. Missing/empty value = field not mapped.
+export type ImportMapping = Record<string, string>;
+
+export interface ImportInspectResult {
+  /** The actual (non-empty) header cells found in row 1, in column order. */
+  headers: string[];
+  /** DB fields the importer can fill, with labels + required flags. */
+  fields: ImportField[];
+  /** Best-guess header for each field via alias matching (null if none). */
+  suggested: Record<string, string | null>;
+}
+
+export type DuplicateMode = 'skip' | 'import';
+
 export interface ImportRowResult {
   rowNumber: number;
   data: Record<string, string>;
-  errors: string[];
+  errors: string[]; // blocking — the row cannot be imported
+  warnings: string[]; // informational (e.g. duplicate notices)
   willEnroll: boolean;
+  willImport: boolean; // false when errors, or a duplicate under 'skip' mode
+  duplicate: boolean; // same name + DOB as an existing/earlier student
   autoAdmissionNumber: boolean;
 }
 
 export interface ImportPreview {
   rows: ImportRowResult[];
-  summary: { total: number; valid: number; invalid: number };
+  summary: {
+    total: number;
+    valid: number; // rows that will import
+    invalid: number; // rows with blocking errors
+    duplicates: number; // rows flagged as duplicates
+  };
 }
 
 @Injectable()
@@ -59,8 +137,7 @@ export class StudentImportService {
     const ws = wb.addWorksheet('Students');
     const headers = [
       'admissionNumber',
-      'firstName',
-      'lastName',
+      'studentName',
       'dateOfBirth',
       'gender',
       'admissionDate',
@@ -85,8 +162,7 @@ export class StudentImportService {
     ws.getRow(1).font = { bold: true };
     ws.addRow({
       admissionNumber: '(leave blank to auto-generate)',
-      firstName: 'Aisha',
-      lastName: 'Khan',
+      studentName: 'Aisha Khan',
       dateOfBirth: '2016-05-12',
       gender: 'female',
       admissionDate: '2026-04-15',
@@ -111,15 +187,38 @@ export class StudentImportService {
     return Buffer.from(out as ArrayBuffer);
   }
 
+  /** Detect the uploaded file's headers and suggest a field mapping. */
+  async inspect(buffer: Buffer): Promise<ImportInspectResult> {
+    const ws = await this.loadSheet(buffer);
+    const headers: string[] = [];
+    const normed: { raw: string; norm: string }[] = [];
+    ws.getRow(1).eachCell((cell) => {
+      const raw = String(cell.value ?? '').trim();
+      if (raw) {
+        headers.push(raw);
+        normed.push({ raw, norm: normalizeHeader(raw) });
+      }
+    });
+    const suggested: Record<string, string | null> = {};
+    for (const field of IMPORT_FIELDS) {
+      const aliases = HEADER_ALIASES[field.key] ?? [];
+      const hit = normed.find((h) => aliases.includes(h.norm));
+      suggested[field.key] = hit ? hit.raw : null;
+    }
+    return { headers, fields: IMPORT_FIELDS, suggested };
+  }
+
   preview(
     schemaName: string,
     schoolId: string,
     buffer: Buffer,
     academicYearId?: string,
+    mapping?: ImportMapping,
+    duplicateMode: DuplicateMode = 'skip',
   ): Promise<ImportPreview> {
     return this.tenant.runInSchema(schemaName, async (em) => {
-      const raw = await this.parse(buffer);
-      return this.validate(em, schoolId, raw, academicYearId);
+      const raw = await this.parse(buffer, mapping);
+      return this.validate(em, schoolId, raw, academicYearId, duplicateMode);
     });
   }
 
@@ -128,10 +227,18 @@ export class StudentImportService {
     schoolId: string,
     buffer: Buffer,
     academicYearId?: string,
+    mapping?: ImportMapping,
+    duplicateMode: DuplicateMode = 'skip',
   ) {
     return this.tenant.runInSchema(schemaName, async (em) => {
-      const raw = await this.parse(buffer);
-      const preview = await this.validate(em, schoolId, raw, academicYearId);
+      const raw = await this.parse(buffer, mapping);
+      const preview = await this.validate(
+        em,
+        schoolId,
+        raw,
+        academicYearId,
+        duplicateMode,
+      );
 
       const studentRepo = em.getRepository(Student);
       const enrolRepo = em.getRepository(StudentEnrollment);
@@ -145,8 +252,10 @@ export class StudentImportService {
       const errors: { rowNumber: number; error: string }[] = [];
 
       for (const row of preview.rows) {
-        if (row.errors.length) {
-          errors.push({ rowNumber: row.rowNumber, error: row.errors[0] });
+        if (!row.willImport) {
+          // Report blocking errors; duplicate-skips are silently left out.
+          if (row.errors.length)
+            errors.push({ rowNumber: row.rowNumber, error: row.errors[0] });
           continue;
         }
         const d = row.data;
@@ -158,8 +267,7 @@ export class StudentImportService {
           studentRepo.create({
             schoolId,
             admissionNumber,
-            firstName: d.firstName,
-            lastName: d.lastName,
+            studentName: d.studentName,
             dateOfBirth: new Date(d.dateOfBirth),
             gender: d.gender as any,
             bloodGroup: d.bloodGroup || null,
@@ -211,7 +319,7 @@ export class StudentImportService {
       }
       return {
         created,
-        skipped: preview.summary.invalid,
+        skipped: preview.rows.length - created,
         errors,
       };
     });
@@ -219,7 +327,7 @@ export class StudentImportService {
 
   // ── internals ───────────────────────────────────────────────────────────────
 
-  private async parse(buffer: Buffer): Promise<Record<string, string>[]> {
+  private async loadSheet(buffer: Buffer): Promise<ExcelJS.Worksheet> {
     const wb = new ExcelJS.Workbook();
     try {
       await wb.xlsx.load(buffer as any);
@@ -228,23 +336,51 @@ export class StudentImportService {
     }
     const ws = wb.worksheets[0];
     if (!ws) throw new BadRequestException('Workbook has no sheets');
+    return ws;
+  }
+
+  private async parse(
+    buffer: Buffer,
+    mapping?: ImportMapping,
+  ): Promise<Record<string, string>[]> {
+    const ws = await this.loadSheet(buffer);
 
     const headerRow = ws.getRow(1);
     const colMap = new Map<number, string>(); // column index → canonical key
-    headerRow.eachCell((cell, col) => {
-      const norm = String(cell.value ?? '')
-        .toLowerCase()
-        .replace(/[\s_]/g, '');
-      for (const [canon, aliases] of Object.entries(HEADER_ALIASES)) {
-        if (aliases.includes(norm)) {
-          colMap.set(col, canon);
-          break;
+    const hasMapping = mapping && Object.keys(mapping).length > 0;
+
+    if (hasMapping) {
+      // Explicit user mapping: canonical field → the exact Excel header text.
+      const headerByCol = new Map<number, { raw: string; norm: string }>();
+      headerRow.eachCell((cell, col) => {
+        const raw = String(cell.value ?? '').trim();
+        headerByCol.set(col, { raw, norm: normalizeHeader(raw) });
+      });
+      for (const [canon, header] of Object.entries(mapping)) {
+        if (!header) continue; // field left unmapped / ignored
+        const wantNorm = normalizeHeader(header);
+        for (const [col, h] of headerByCol) {
+          if (h.raw === header || h.norm === wantNorm) {
+            colMap.set(col, canon);
+            break;
+          }
         }
       }
-    });
+    } else {
+      // Auto-detect columns via the known header aliases.
+      headerRow.eachCell((cell, col) => {
+        const norm = normalizeHeader(String(cell.value ?? ''));
+        for (const [canon, aliases] of Object.entries(HEADER_ALIASES)) {
+          if (aliases.includes(norm)) {
+            colMap.set(col, canon);
+            break;
+          }
+        }
+      });
+    }
     if (colMap.size === 0) {
       throw new BadRequestException(
-        'No recognizable columns — use the provided template',
+        'No columns matched — map your spreadsheet columns to fields, or use the provided template',
       );
     }
 
@@ -302,28 +438,36 @@ export class StudentImportService {
     schoolId: string,
     raw: Record<string, string>[],
     academicYearId?: string,
+    duplicateMode: DuplicateMode = 'skip',
   ): Promise<ImportPreview> {
     const existing = await em.getRepository(Student).find({
       where: { schoolId },
       withDeleted: true,
-      select: { admissionNumber: true },
+      select: { admissionNumber: true, studentName: true, dateOfBirth: true },
     });
     const existingAdm = new Set(existing.map((s) => s.admissionNumber));
+    // Identity key for duplicate detection: normalized name + date of birth.
+    const existingNameDob = new Set(
+      existing
+        .filter((s) => s.studentName)
+        .map((s) => nameDobKey(s.studentName, s.dateOfBirth)),
+    );
     const seenInFile = new Set<string>();
+    const seenNameDob = new Set<string>();
 
     const classMap = await this.classMap(em, schoolId, academicYearId);
     const sectionMap = await this.sectionMap(em, schoolId);
 
     const rows: ImportRowResult[] = raw.map((d) => {
       const errors: string[] = [];
+      const warnings: string[] = [];
       const rowNumber = Number(d.__row ?? 0);
 
-      if (!d.firstName) errors.push('First name is required');
-      if (!d.lastName) errors.push('Last name is required');
+      if (!d.studentName) errors.push('Student name is required');
 
+      const dobIso = d.dateOfBirth ? this.toIsoDate(d.dateOfBirth) : null;
       if (!d.dateOfBirth) errors.push('Date of birth is required');
-      else if (!this.toIsoDate(d.dateOfBirth))
-        errors.push('Date of birth is not a valid date');
+      else if (!dobIso) errors.push('Date of birth is not a valid date');
 
       if (d.admissionDate && !this.toIsoDate(d.admissionDate))
         errors.push('Admission date is not a valid date');
@@ -341,6 +485,24 @@ export class StudentImportService {
         if (seenInFile.has(d.admissionNumber))
           errors.push('Duplicate admission number in file');
         seenInFile.add(d.admissionNumber);
+      }
+
+      // Duplicate-by-identity check (only meaningful once name + DOB are valid).
+      let duplicate = false;
+      if (d.studentName && dobIso) {
+        const key = nameDobKey(d.studentName, dobIso);
+        if (existingNameDob.has(key) || seenNameDob.has(key)) {
+          duplicate = true;
+          warnings.push(
+            duplicateMode === 'skip'
+              ? 'Duplicate of an existing student (same name & date of birth) — skipped'
+              : 'Possible duplicate (same name & date of birth) — imported anyway',
+          );
+        } else if (errors.length === 0) {
+          // Only a clean row claims the identity, so it can't suppress a later
+          // valid row that happens to duplicate an errored one.
+          seenNameDob.add(key);
+        }
       }
 
       // Enrollment columns: class is required to enroll; section is optional.
@@ -369,13 +531,27 @@ export class StudentImportService {
         }
       }
 
-      return { rowNumber, data: d, errors, willEnroll, autoAdmissionNumber };
+      const willImport =
+        errors.length === 0 && !(duplicate && duplicateMode === 'skip');
+
+      return {
+        rowNumber,
+        data: d,
+        errors,
+        warnings,
+        willEnroll,
+        willImport,
+        duplicate,
+        autoAdmissionNumber,
+      };
     });
 
     const invalid = rows.filter((r) => r.errors.length).length;
+    const valid = rows.filter((r) => r.willImport).length;
+    const duplicates = rows.filter((r) => r.duplicate).length;
     return {
       rows,
-      summary: { total: rows.length, valid: rows.length - invalid, invalid },
+      summary: { total: rows.length, valid, invalid, duplicates },
     };
   }
 

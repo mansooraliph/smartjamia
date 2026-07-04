@@ -67,7 +67,7 @@ export class TransferCertificatesService {
     if (opts.search) {
       const t = `%${opts.search.trim()}%`;
       qb.andWhere(
-        '(tc.tcNumber ILIKE :t OR st.firstName ILIKE :t OR st.lastName ILIKE :t OR st.admissionNumber ILIKE :t)',
+        '(tc.tcNumber ILIKE :t OR st.studentName ILIKE :t OR st.admissionNumber ILIKE :t)',
         { t },
       );
     }
@@ -100,9 +100,7 @@ export class TransferCertificatesService {
       const withStudents = await this.attachStudents(em, schoolId, tcs);
       return withStudents.map((t) => ({
         tcNumber: t.tcNumber,
-        studentName: t.student
-          ? `${t.student.firstName} ${t.student.lastName}`
-          : '',
+        studentName: t.student ? t.student.studentName : '',
         admissionNumber: t.student?.admissionNumber ?? '',
         lastClass: t.lastClass,
         reason: t.reason,
@@ -289,8 +287,7 @@ export class TransferCertificatesService {
           ? {
               id: s.id,
               admissionNumber: s.admissionNumber,
-              firstName: s.firstName,
-              lastName: s.lastName,
+              studentName: s.studentName,
               status: s.status,
             }
           : null,

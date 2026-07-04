@@ -349,7 +349,7 @@ function StudentRow({
       <td className="px-4 py-3">
         <div className="leading-tight">
           <div className="font-medium text-slate-900">
-            {row.firstName} {row.lastName}
+            {row.studentName}
           </div>
           {row.status === null && (
             <div className="text-[10px] uppercase tracking-wider text-amber-600">

@@ -5,7 +5,10 @@ import {
   AcademicsApi,
   ClassesApi,
   classLabel,
+  DuplicateMode,
   ImportCommitResult,
+  ImportInspect,
+  ImportMapping,
   ImportPreview,
   SectionsApi,
   StudentsApi,
@@ -39,31 +42,82 @@ export function ImportStudentsModal({
   const term = useTerminology();
   const [academicYearId, setAcademicYearId] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [inspect, setInspect] = useState<ImportInspect | null>(null);
+  const [mapping, setMapping] = useState<ImportMapping>({});
+  const [dupMode, setDupMode] = useState<DuplicateMode>('skip');
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportCommitResult | null>(null);
-  const [busy, setBusy] = useState<'preview' | 'commit' | null>(null);
+  const [busy, setBusy] = useState<'inspect' | 'preview' | 'commit' | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
+
+  const reset = () => {
+    setFile(null);
+    setInspect(null);
+    setMapping({});
+    setPreview(null);
+    setResult(null);
+    setError(null);
+  };
 
   useEffect(() => {
     if (open) {
       setAcademicYearId(defaultYear(years));
-      setFile(null);
-      setPreview(null);
-      setResult(null);
-      setError(null);
+      reset();
     }
   }, [open, years]);
 
+  // Read the chosen file's headers and pre-fill the mapping with suggestions.
+  const chooseFile = async (f: File | null) => {
+    reset();
+    setFile(f);
+    if (!f) return;
+    setBusy('inspect');
+    try {
+      const info = await StudentsApi.importInspect(f);
+      setInspect(info);
+      const initial: ImportMapping = {};
+      for (const field of info.fields) {
+        const s = info.suggested[field.key];
+        if (s) initial[field.key] = s;
+      }
+      setMapping(initial);
+    } catch (e: any) {
+      setError(
+        e?.response?.data?.error?.message ?? e?.message ?? 'Could not read file',
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const requiredUnmapped =
+    inspect?.fields.filter((f) => f.required && !mapping[f.key]) ?? [];
+  const canRun = !!file && !!inspect && requiredUnmapped.length === 0;
+
   const run = async (mode: 'preview' | 'commit') => {
-    if (!file) return;
+    if (!file || !canRun) return;
     setBusy(mode);
     setError(null);
     try {
       if (mode === 'preview') {
-        setPreview(await StudentsApi.importPreview(file, academicYearId));
+        setPreview(
+          await StudentsApi.importPreview(
+            file,
+            academicYearId,
+            mapping,
+            dupMode,
+          ),
+        );
         setResult(null);
       } else {
-        const r = await StudentsApi.importCommit(file, academicYearId);
+        const r = await StudentsApi.importCommit(
+          file,
+          academicYearId,
+          mapping,
+          dupMode,
+        );
         setResult(r);
         onImported();
       }
@@ -76,7 +130,8 @@ export function ImportStudentsModal({
     }
   };
 
-  const invalidRows = preview?.rows.filter((r) => r.errors.length) ?? [];
+  const flaggedRows =
+    preview?.rows.filter((r) => r.errors.length || r.warnings.length) ?? [];
 
   return (
     <Modal
@@ -94,7 +149,7 @@ export function ImportStudentsModal({
             type="button"
             className="btn-secondary"
             onClick={() => run('preview')}
-            disabled={!file || !!busy}
+            disabled={!canRun || !!busy}
           >
             {busy === 'preview' ? 'Validating…' : 'Validate'}
           </button>
@@ -102,7 +157,11 @@ export function ImportStudentsModal({
             type="button"
             className="btn-primary"
             onClick={() => run('commit')}
-            disabled={!file || !!busy || (preview ? preview.summary.valid === 0 : false)}
+            disabled={
+              !canRun ||
+              !!busy ||
+              (preview ? preview.summary.valid === 0 : false)
+            }
           >
             {busy === 'commit' ? 'Importing…' : 'Import valid rows'}
           </button>
@@ -132,6 +191,23 @@ export function ImportStudentsModal({
               ))}
             </Select>
           </div>
+          <div>
+            <label className="mr-2 text-sm text-slate-600">
+              If a student already exists
+            </label>
+            <Select
+              className="!inline-block !w-44"
+              value={dupMode}
+              onChange={(e) => {
+                setDupMode(e.target.value as DuplicateMode);
+                setPreview(null); // counts change → force re-validate
+                setResult(null);
+              }}
+            >
+              <option value="skip">Skip duplicates</option>
+              <option value="import">Import anyway</option>
+            </Select>
+          </div>
         </div>
 
         <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 hover:border-brand-400 hover:bg-brand-50/40">
@@ -145,13 +221,71 @@ export function ImportStudentsModal({
             type="file"
             accept=".xlsx"
             className="hidden"
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null);
-              setPreview(null);
-              setResult(null);
-            }}
+            onChange={(e) => chooseFile(e.target.files?.[0] ?? null)}
           />
         </label>
+
+        {busy === 'inspect' && (
+          <div className="flex items-center gap-2 text-sm text-slate-500">
+            <Loader2 className="h-4 w-4 animate-spin" /> Reading columns…
+          </div>
+        )}
+
+        {inspect && (
+          <div className="rounded-md border border-slate-200">
+            <div className="border-b border-slate-100 px-3 py-2">
+              <div className="text-sm font-medium text-slate-700">
+                Map your columns
+              </div>
+              <p className="mt-0.5 text-xs text-slate-500">
+                Match each field to a column from your file.{' '}
+                <span className="text-red-500">*</span> required. Leave a field
+                as <em>“Ignore”</em> to skip it. If a mapped Admission Number
+                cell is blank, one is auto-generated (ADM…).
+              </p>
+            </div>
+            <div className="grid max-h-72 grid-cols-1 gap-x-6 gap-y-2 overflow-auto px-3 py-3 sm:grid-cols-2">
+              {inspect.fields.map((f) => {
+                const missing = f.required && !mapping[f.key];
+                return (
+                  <div key={f.key} className="flex items-center gap-2">
+                    <label className="w-40 shrink-0 text-xs text-slate-600">
+                      {f.label}
+                      {f.required && <span className="text-red-500"> *</span>}
+                    </label>
+                    <Select
+                      className={`!w-full !py-1 text-sm ${
+                        missing ? '!border-red-300 !bg-red-50' : ''
+                      }`}
+                      value={mapping[f.key] ?? ''}
+                      onChange={(e) =>
+                        setMapping((prev) => {
+                          const next = { ...prev };
+                          if (e.target.value) next[f.key] = e.target.value;
+                          else delete next[f.key];
+                          return next;
+                        })
+                      }
+                    >
+                      <option value="">— Ignore —</option>
+                      {inspect.headers.map((h) => (
+                        <option key={h} value={h}>
+                          {h}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                );
+              })}
+            </div>
+            {requiredUnmapped.length > 0 && (
+              <div className="border-t border-slate-100 px-3 py-2 text-xs text-amber-600">
+                Map required field(s):{' '}
+                {requiredUnmapped.map((f) => f.label).join(', ')}
+              </div>
+            )}
+          </div>
+        )}
 
         {error && (
           <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
@@ -161,32 +295,50 @@ export function ImportStudentsModal({
 
         {preview && !result && (
           <div className="rounded-md border border-slate-200">
-            <div className="flex items-center gap-3 border-b border-slate-100 px-3 py-2 text-sm">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-b border-slate-100 px-3 py-2 text-sm">
               <span className="font-medium">{preview.summary.total} rows</span>
               <span className="text-green-600">
-                {preview.summary.valid} valid
+                {preview.summary.valid} will import
               </span>
-              <span className="text-red-600">
-                {preview.summary.invalid} invalid
-              </span>
+              {preview.summary.invalid > 0 && (
+                <span className="text-red-600">
+                  {preview.summary.invalid} invalid
+                </span>
+              )}
+              {preview.summary.duplicates > 0 && (
+                <span className="text-amber-600">
+                  {preview.summary.duplicates} duplicate
+                  {preview.summary.duplicates === 1 ? '' : 's'}
+                  {dupMode === 'skip' ? ' (skipped)' : ' (importing)'}
+                </span>
+              )}
             </div>
-            {invalidRows.length > 0 && (
-              <div className="max-h-52 overflow-auto">
+            {flaggedRows.length > 0 && (
+              <div className="max-h-56 overflow-auto">
                 <table className="w-full text-xs">
-                  <thead className="text-left text-slate-500">
+                  <thead className="sticky top-0 bg-white text-left text-slate-500">
                     <tr>
                       <th className="px-3 py-1.5">Row</th>
-                      <th className="px-3 py-1.5">Issues</th>
+                      <th className="px-3 py-1.5">Messages</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {invalidRows.map((r) => (
-                      <tr key={r.rowNumber} className="border-t border-slate-50">
+                    {flaggedRows.map((r) => (
+                      <tr key={r.rowNumber} className="border-t border-slate-50 align-top">
                         <td className="px-3 py-1.5 text-slate-500">
                           {r.rowNumber}
                         </td>
-                        <td className="px-3 py-1.5 text-red-600">
-                          {r.errors.join('; ')}
+                        <td className="px-3 py-1.5">
+                          {r.errors.map((e, i) => (
+                            <div key={`e${i}`} className="text-red-600">
+                              ✕ {e}
+                            </div>
+                          ))}
+                          {r.warnings.map((w, i) => (
+                            <div key={`w${i}`} className="text-amber-600">
+                              ⚠ {w}
+                            </div>
+                          ))}
                         </td>
                       </tr>
                     ))}
@@ -418,7 +570,7 @@ export function BulkAssignModal({
                     <code className="text-xs">{s.admissionNumber}</code>
                   </td>
                   <td className="px-3 py-1.5 font-medium text-slate-900">
-                    {s.firstName} {s.lastName}
+                    {s.studentName}
                   </td>
                   <td className="px-3 py-1.5 capitalize text-slate-500">
                     {s.status}

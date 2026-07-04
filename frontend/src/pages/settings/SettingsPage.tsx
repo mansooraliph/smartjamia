@@ -14,6 +14,7 @@ import {
   RbacApi,
   RoleView,
   SettingsApi,
+  StudentsApi,
   Terminology,
 } from '@/services/school.api';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -89,6 +90,7 @@ const PRESETS: { label: string; value: Omit<Terminology, 'institutionType'> }[] 
 
 function GeneralTab() {
   const qc = useQueryClient();
+  const { can } = usePermissions();
   const { data } = useQuery({ queryKey: ['terminology'], queryFn: SettingsApi.getTerminology });
   const [form, setForm] = useState<Terminology>({ level: '', levelPlural: '', group: '', groupPlural: '', institutionType: 'school' });
   useEffect(() => { if (data) setForm(data); }, [data]);
@@ -187,6 +189,110 @@ function GeneralTab() {
         )}
       </div>
       </div>
+
+      {can('/students', 'delete') && <DangerZone />}
+    </div>
+  );
+}
+
+// ───── Danger zone (bulk destructive actions) ───────────────────────────────
+function DangerZone() {
+  const qc = useQueryClient();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [done, setDone] = useState<{ deleted: number; related: number } | null>(
+    null,
+  );
+
+  const del = useMutation({
+    mutationFn: () => StudentsApi.deleteAll(),
+    onSuccess: (r) => {
+      setDone(r);
+      setConfirmOpen(false);
+      setTyped('');
+      qc.invalidateQueries({ queryKey: ['students'] });
+    },
+  });
+
+  return (
+    <div className="rounded-lg border border-red-200 bg-red-50/40 p-5">
+      <div className="mb-1 text-sm font-semibold text-red-700">Danger zone</div>
+      <p className="mb-4 text-sm text-slate-600">
+        Permanently delete <b>all</b> students for this school, along with every
+        record linked to them — enrolments, attendance, marks, fees, parents and
+        documents. This <b>cannot be undone</b>, and it frees admission numbers
+        so you can re-import cleanly.
+      </p>
+      {done !== null && (
+        <div className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+          Deleted {done.deleted} student{done.deleted === 1 ? '' : 's'}
+          {done.related > 0
+            ? ` and ${done.related} related record${
+                done.related === 1 ? '' : 's'
+              }`
+            : ''}
+          .
+        </div>
+      )}
+      <button
+        type="button"
+        className="inline-flex items-center gap-1.5 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50"
+        onClick={() => {
+          setDone(null);
+          setConfirmOpen(true);
+        }}
+      >
+        <Trash2 className="h-4 w-4" /> Delete all students
+      </button>
+
+      <Modal
+        open={confirmOpen}
+        onClose={() => {
+          setConfirmOpen(false);
+          setTyped('');
+          del.reset();
+        }}
+        title="Delete all students?"
+        description="Permanently deletes every student and all related records (enrolments, attendance, marks, fees…). This cannot be undone. Type DELETE to confirm."
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setConfirmOpen(false);
+                setTyped('');
+                del.reset();
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+              disabled={typed !== 'DELETE' || del.isPending}
+              onClick={() => del.mutate()}
+            >
+              <Trash2 className="h-4 w-4" />
+              {del.isPending ? 'Deleting…' : 'Delete all'}
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <Input
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            placeholder="Type DELETE"
+            autoFocus
+          />
+          {del.error && (
+            <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errMsg(del.error)}
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }

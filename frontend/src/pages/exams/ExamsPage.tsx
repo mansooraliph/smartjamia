@@ -480,7 +480,7 @@ function MarksEntry({
                 <tr key={st.id} className="hover:bg-slate-50">
                   <td className="sticky left-0 z-10 bg-white px-4 py-2">
                     <div className="text-sm font-medium text-slate-900">
-                      {st.firstName} {st.lastName}
+                      {st.studentName}
                     </div>
                     <div className="text-xs text-slate-400">
                       {st.rollNumber ? `Roll ${st.rollNumber} · ` : ''}

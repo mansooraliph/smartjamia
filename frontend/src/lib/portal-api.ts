@@ -21,8 +21,7 @@ portalAxios.interceptors.request.use((config) => {
 export interface PortalStudent {
   id: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
   gender: string | null;
   dateOfBirth: string | null;
   bloodGroup: string | null;

@@ -127,7 +127,7 @@ export function StudentViewPage() {
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-semibold text-slate-900">
-              {student.firstName} {student.lastName}
+              {student.studentName}
             </h1>
             <Badge tone={student.status === 'active' ? 'green' : 'slate'}>
               {student.status}
@@ -205,7 +205,7 @@ function StudentAvatar({
   student,
   canEdit,
 }: {
-  student: { id: string; firstName: string; photoUrl: string | null };
+  student: { id: string; studentName: string; photoUrl: string | null };
   canEdit: boolean;
 }) {
   const qc = useQueryClient();
@@ -228,7 +228,7 @@ function StudentAvatar({
         />
       ) : (
         <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brand-50 text-2xl font-semibold text-brand-600">
-          {student.firstName?.[0]?.toUpperCase() ?? '?'}
+          {student.studentName?.[0]?.toUpperCase() ?? '?'}
         </div>
       )}
       {canEdit && (
@@ -292,8 +292,7 @@ function OverviewTab({
       <section className="card p-5">
         <h3 className="mb-4 font-semibold text-slate-900">Personal details</h3>
         <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Row label="First name" value={student.firstName} />
-          <Row label="Last name" value={student.lastName} />
+          <Row label="Student name" value={student.studentName} />
           <Row label="Gender" value={student.gender} />
           <Row label="Date of birth" value={formatDate(student.dateOfBirth)} />
           <Row label="Blood group" value={student.bloodGroup} />

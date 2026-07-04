@@ -65,8 +65,7 @@ const parentSchema = z
 const schema = z
   .object({
     admissionNumber: z.string().min(1, 'Required'),
-    firstName: z.string().min(1, 'Required'),
-    lastName: z.string().min(1, 'Required'),
+    studentName: z.string().min(1, 'Required').max(100),
     dateOfBirth: z.string().min(1, 'Required'),
     gender: z.enum(GENDERS),
     bloodGroup: z.string().optional().or(z.literal('')),
@@ -193,8 +192,7 @@ export function StudentRegistrationPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       admissionNumber: '',
-      firstName: '',
-      lastName: '',
+      studentName: '',
       dateOfBirth: '',
       gender: 'male',
       bloodGroup: '',
@@ -235,8 +233,7 @@ export function StudentRegistrationPage() {
       originalParentIds.current = ps.map((p) => p.id);
       reset({
         admissionNumber: student.admissionNumber,
-        firstName: student.firstName,
-        lastName: student.lastName,
+        studentName: student.studentName,
         dateOfBirth: student.dateOfBirth?.slice(0, 10) ?? '',
         gender: student.gender,
         bloodGroup: student.bloodGroup ?? '',
@@ -339,8 +336,7 @@ export function StudentRegistrationPage() {
     mutationFn: async (v: FormValues) => {
       const studentPayload: Record<string, unknown> = {
         admissionNumber: v.admissionNumber,
-        firstName: v.firstName,
-        lastName: v.lastName,
+        studentName: v.studentName,
         dateOfBirth: v.dateOfBirth,
         gender: v.gender,
         bloodGroup: v.bloodGroup || undefined,
@@ -446,11 +442,8 @@ export function StudentRegistrationPage() {
             >
               <Input {...register('admissionNumber')} placeholder="ADM2026001" />
             </Field>
-            <Field label="First name" required error={errors.firstName?.message}>
-              <Input {...register('firstName')} />
-            </Field>
-            <Field label="Last name" required error={errors.lastName?.message}>
-              <Input {...register('lastName')} />
+            <Field label="Student name" required error={errors.studentName?.message}>
+              <Input {...register('studentName')} />
             </Field>
 
             <Field

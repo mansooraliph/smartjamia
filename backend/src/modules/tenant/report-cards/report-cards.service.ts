@@ -166,9 +166,7 @@ export class ReportCardsService {
           return {
             id: c.id,
             studentId: c.studentId,
-            studentName: s
-              ? `${s.firstName} ${s.lastName}`
-              : '—',
+            studentName: s ? s.studentName : '—',
             admissionNumber: s?.admissionNumber ?? '',
             totalMarks: Number(c.totalMarks),
             maxTotalMarks: Number(c.maxTotalMarks),

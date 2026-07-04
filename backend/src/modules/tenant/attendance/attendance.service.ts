@@ -15,8 +15,7 @@ import { BulkMarkAttendanceDto } from './dto/attendance.dto';
 export interface SectionAttendanceRow {
   studentId: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
   rollNumber: string | null;
   status: string | null;
   note: string | null;
@@ -94,8 +93,7 @@ export class AttendanceService {
         .map((s) => ({
           studentId: s.id,
           admissionNumber: s.admissionNumber,
-          firstName: s.firstName,
-          lastName: s.lastName,
+          studentName: s.studentName,
           rollNumber: rollById.get(s.id) ?? null,
           status: attById.get(s.id)?.status ?? null,
           note: attById.get(s.id)?.note ?? null,
@@ -105,7 +103,7 @@ export class AttendanceService {
           const ar = parseInt(a.rollNumber ?? '99999', 10);
           const br = parseInt(b.rollNumber ?? '99999', 10);
           if (ar !== br) return ar - br;
-          return a.firstName.localeCompare(b.firstName);
+          return a.studentName.localeCompare(b.studentName);
         });
 
       const summary = { present: 0, absent: 0, late: 0, holiday: 0, half_day: 0 };

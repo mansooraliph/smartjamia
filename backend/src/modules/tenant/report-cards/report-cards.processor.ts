@@ -188,7 +188,7 @@ export class ReportCardsProcessor {
         ? titleCase(data.exam.examType.replace(/_/g, ' '))
         : null,
       academicYear: data.year?.name ?? null,
-      studentName: `${data.student.firstName} ${data.student.lastName}`,
+      studentName: data.student.studentName,
       admissionNumber: data.student.admissionNumber,
       className: data.cls?.name ?? '—',
       sectionName: data.section?.name ?? null,
