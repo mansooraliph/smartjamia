@@ -71,7 +71,7 @@ export class PortalService {
     const entity = await this.loadEntity(em, schoolId, kind, id);
     const name =
       kind === 'student'
-        ? `${(entity as Student).firstName} ${(entity as Student).lastName}`
+        ? (entity as Student).studentName
         : (entity as Parent).name;
     // Portal users log in by admission#/mobile + PIN; email is a synthetic,
     // unique placeholder to satisfy the NOT-NULL users.email column.
@@ -402,8 +402,7 @@ export class PortalService {
     return {
       id: student.id,
       admissionNumber: student.admissionNumber,
-      firstName: student.firstName,
-      lastName: student.lastName,
+      studentName: student.studentName,
       gender: student.gender,
       dateOfBirth: student.dateOfBirth,
       bloodGroup: student.bloodGroup,

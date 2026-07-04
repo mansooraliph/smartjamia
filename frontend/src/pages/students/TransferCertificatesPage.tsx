@@ -177,7 +177,7 @@ export function TransferCertificatesPage() {
               <div className="leading-tight">
                 <div className="font-medium text-slate-900">
                   {t.student
-                    ? `${t.student.firstName} ${t.student.lastName}`
+                    ? t.student.studentName
                     : '—'}
                 </div>
                 <div className="text-xs text-slate-500">
@@ -274,7 +274,7 @@ export function TransferCertificatesPage() {
         open={modalOpen}
         students={eligibleStudents.map((s) => ({
           id: s.id,
-          label: `${s.admissionNumber} · ${s.firstName} ${s.lastName}`,
+          label: `${s.admissionNumber} · ${s.studentName}`,
         }))}
         preselectStudentId={preselectStudentId}
         saving={issue.isPending}
@@ -300,7 +300,7 @@ export function TransferCertificatesPage() {
         title="Revoke certificate?"
         message={`Revoke ${confirm.tc?.tcNumber} and restore ${
           confirm.tc?.student
-            ? `${confirm.tc.student.firstName} ${confirm.tc.student.lastName}`
+            ? confirm.tc.student.studentName
             : 'the student'
         } to active status.`}
         confirmText="Revoke TC"

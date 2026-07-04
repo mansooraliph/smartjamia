@@ -27,11 +27,8 @@ export class Student {
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId: string | null;
 
-  @Column({ type: 'varchar', length: 100, name: 'first_name' })
-  firstName: string;
-
-  @Column({ type: 'varchar', length: 100, name: 'last_name' })
-  lastName: string;
+  @Column({ type: 'varchar', length: 100, name: 'student_name' })
+  studentName: string;
 
   @Column({ type: 'date', name: 'date_of_birth' })
   dateOfBirth: Date;

@@ -203,7 +203,7 @@ export const BiometricDevicesApi = {
     const studentResults: UserSearchResult[] = students.map((s) => ({
       id: s.id,
       userCode: s.admissionNumber,
-      name: `${s.firstName} ${s.lastName}`.trim(),
+      name: s.studentName,
       kind: 'student',
       subtitle: s.admissionNumber,
     }));

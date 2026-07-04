@@ -416,14 +416,13 @@ export class BiometricDevicesService {
         select: {
           id: true,
           admissionNumber: true,
-          firstName: true,
-          lastName: true,
+          studentName: true,
         },
       });
       if (student) {
         return {
           userCode: buildUserCode('student', student.admissionNumber, prefixes),
-          name: `${student.firstName} ${student.lastName}`.trim(),
+          name: student.studentName,
         };
       }
       const staff = await em.getRepository(Staff).findOne({
@@ -475,11 +474,11 @@ export class BiometricDevicesService {
           .createQueryBuilder('s')
           .where('s.school_id = :schoolId', { schoolId })
           .andWhere("s.status = 'active'")
-          .orderBy('s.first_name', 'ASC')
+          .orderBy('s.student_name', 'ASC')
           .take(20);
         if (term)
           qb.andWhere(
-            '(s.first_name ILIKE :like OR s.last_name ILIKE :like OR s.admission_number ILIKE :like)',
+            '(s.student_name ILIKE :like OR s.admission_number ILIKE :like)',
             { like },
           );
         const rows = await qb.getMany();
@@ -488,7 +487,7 @@ export class BiometricDevicesService {
           userType: 'student' as const,
           code: s.admissionNumber,
           userCode: buildUserCode('student', s.admissionNumber, prefixes),
-          name: `${s.firstName} ${s.lastName}`.trim(),
+          name: s.studentName,
           subtitle: s.admissionNumber,
         }));
       }
@@ -568,8 +567,7 @@ export class BiometricDevicesService {
           select: {
             id: true,
             admissionNumber: true,
-            firstName: true,
-            lastName: true,
+            studentName: true,
           },
         });
         if (!s) return null;
@@ -578,7 +576,7 @@ export class BiometricDevicesService {
           userType: 'student',
           code: s.admissionNumber,
           userCode: buildUserCode('student', s.admissionNumber, prefixes),
-          name: `${s.firstName} ${s.lastName}`.trim(),
+          name: s.studentName,
           subtitle: s.admissionNumber,
         };
       }
@@ -798,7 +796,7 @@ export class BiometricDevicesService {
       const prefixes = await loadBiometricPrefixes(em, schoolId);
       const students = await em.getRepository(Student).find({
         where: { schoolId, status: 'active' as any },
-        select: { admissionNumber: true, firstName: true, lastName: true },
+        select: { admissionNumber: true, studentName: true },
       });
       const staff = await em.getRepository(Staff).find({
         where: { schoolId, status: 'active' as any },
@@ -816,7 +814,7 @@ export class BiometricDevicesService {
 
       const cmds: string[] = [];
       for (const s of students) {
-        const name = `${s.firstName} ${s.lastName}`.trim();
+        const name = s.studentName;
         const code = buildUserCode('student', s.admissionNumber, prefixes);
         cmds.push(this.buildAddUserCommand(code, name));
       }

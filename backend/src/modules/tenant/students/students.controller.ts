@@ -49,8 +49,7 @@ type StudentExportRow = Awaited<
 
 const STUDENT_EXPORT_COLUMNS: ExportColumn<StudentExportRow>[] = [
   { header: 'Admission #', value: (r) => r.admissionNumber, width: 16 },
-  { header: 'First Name', value: (r) => r.firstName },
-  { header: 'Last Name', value: (r) => r.lastName },
+  { header: 'Student Name', value: (r) => r.studentName, width: 24 },
   { header: 'Gender', value: (r) => r.gender },
   { header: 'Date of Birth', value: (r) => fmtDate(r.dateOfBirth) },
   { header: 'Blood Group', value: (r) => r.bloodGroup },
@@ -112,6 +111,20 @@ export class StudentsController {
     res.end(buf);
   }
 
+  @Post('import/inspect')
+  @Roles(...ADMIN_ROLES)
+  @ApiOperation({
+    summary: 'Detect an uploaded file’s columns and suggest a field mapping',
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  importInspect(
+    @Tenant() _t: TenantContext,
+    @UploadedFile() file: UploadedExcel,
+  ) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    return this.importer.inspect(file.buffer);
+  }
+
   @Post('import/preview')
   @Roles(...ADMIN_ROLES)
   @ApiOperation({ summary: 'Validate an uploaded import file (no writes)' })
@@ -121,6 +134,8 @@ export class StudentsController {
     @Tenant() t: TenantContext,
     @UploadedFile() file: UploadedExcel,
     @Query('academicYearId') academicYearId?: string,
+    @Body('mapping') mapping?: string,
+    @Body('duplicates') duplicates?: string,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.importer.preview(
@@ -128,6 +143,8 @@ export class StudentsController {
       t.schoolId,
       file.buffer,
       academicYearId || undefined,
+      this.parseMapping(mapping),
+      duplicates === 'import' ? 'import' : 'skip',
     );
   }
 
@@ -140,6 +157,8 @@ export class StudentsController {
     @Tenant() t: TenantContext,
     @UploadedFile() file: UploadedExcel,
     @Query('academicYearId') academicYearId?: string,
+    @Body('mapping') mapping?: string,
+    @Body('duplicates') duplicates?: string,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.importer.commit(
@@ -147,7 +166,28 @@ export class StudentsController {
       t.schoolId,
       file.buffer,
       academicYearId || undefined,
+      this.parseMapping(mapping),
+      duplicates === 'import' ? 'import' : 'skip',
     );
+  }
+
+  /** Parse the multipart `mapping` field (a JSON string) into a field→header map. */
+  private parseMapping(raw?: string): Record<string, string> | undefined {
+    if (!raw) return undefined;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new BadRequestException('Invalid column mapping');
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new BadRequestException('Invalid column mapping');
+    }
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(parsed as Record<string, unknown>)) {
+      if (typeof v === 'string' && v.trim()) out[k] = v.trim();
+    }
+    return Object.keys(out).length ? out : undefined;
   }
 
   @Get('export')
@@ -213,6 +253,15 @@ export class StudentsController {
     @Body() dto: UpdateStudentDto,
   ) {
     return this.svc.update(t.schemaName, t.schoolId, id, dto);
+  }
+
+  // Declared before ':id' so the literal path wins over the UUID param route.
+  @Delete('all')
+  @Roles(...ADMIN_ROLES)
+  @RequirePermissions('/students:delete')
+  @ApiOperation({ summary: 'Soft-delete ALL students for the school' })
+  removeAll(@Tenant() t: TenantContext) {
+    return this.svc.removeAll(t.schemaName, t.schoolId);
   }
 
   @Delete(':id')

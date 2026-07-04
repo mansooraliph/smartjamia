@@ -141,8 +141,7 @@ export class AcademicsService {
         .map((s) => ({
           id: s.id,
           admissionNumber: s.admissionNumber,
-          firstName: s.firstName,
-          lastName: s.lastName,
+          studentName: s.studentName,
           rollNumber: eMap.get(s.id)?.rollNumber ?? null,
         }))
         .sort((a, b) =>

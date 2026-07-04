@@ -107,7 +107,7 @@ export class TransferCertificatesProcessor {
       principalName: data.profile?.principalName ?? null,
       tcNumber: data.tc.tcNumber,
       issueDate: dayjs(data.tc.issueDate).format('DD MMM YYYY'),
-      studentName: `${data.student.firstName} ${data.student.lastName}`,
+      studentName: data.student.studentName,
       admissionNumber: data.student.admissionNumber,
       dateOfBirth: data.student.dateOfBirth
         ? dayjs(data.student.dateOfBirth).format('DD MMM YYYY')

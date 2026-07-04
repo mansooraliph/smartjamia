@@ -76,8 +76,7 @@ export class ParentsService {
           ? {
               id: s.id,
               admissionNumber: s.admissionNumber,
-              firstName: s.firstName,
-              lastName: s.lastName,
+              studentName: s.studentName,
             }
           : null,
       };
@@ -106,7 +105,7 @@ export class ParentsService {
       return withStudents.map((p) => ({
         admissionNumber: p.student?.admissionNumber ?? '',
         student: p.student
-          ? `${p.student.firstName} ${p.student.lastName}`
+          ? p.student.studentName
           : '',
         name: p.name,
         relation: p.relation,

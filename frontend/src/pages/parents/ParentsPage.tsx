@@ -135,7 +135,7 @@ export function ParentsPage() {
       Object.fromEntries(
         studentOptions.map((s) => [
           s.id,
-          `${s.admissionNumber} · ${s.firstName} ${s.lastName}`,
+          `${s.admissionNumber} · ${s.studentName}`,
         ]),
       ),
     [studentOptions],
@@ -198,7 +198,7 @@ export function ParentsPage() {
           <option value="">All students</option>
           {studentOptions.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.admissionNumber} · {s.firstName} {s.lastName}
+              {s.admissionNumber} · {s.studentName}
             </option>
           ))}
         </Select>
@@ -243,7 +243,7 @@ export function ParentsPage() {
               p.student ? (
                 <div className="leading-tight">
                   <div className="text-sm text-slate-900">
-                    {p.student.firstName} {p.student.lastName}
+                    {p.student.studentName}
                   </div>
                   <div className="text-xs text-slate-500">
                     {p.student.admissionNumber}
@@ -305,7 +305,7 @@ export function ParentsPage() {
         parent={modal.parent}
         students={studentOptions.map((s) => ({
           id: s.id,
-          label: `${s.admissionNumber} · ${s.firstName} ${s.lastName}`,
+          label: `${s.admissionNumber} · ${s.studentName}`,
         }))}
         defaultStudentId={studentFilter}
         saving={upsert.isPending}
@@ -373,7 +373,7 @@ export function ParentsPage() {
         title="Delete parent record?"
         message={`Remove ${confirm.parent?.name} (${confirm.parent?.relation}) for ${
           confirm.parent?.student
-            ? `${confirm.parent.student.firstName} ${confirm.parent.student.lastName}`
+            ? confirm.parent.student.studentName
             : 'the student'
         }.`}
         confirmText="Delete"

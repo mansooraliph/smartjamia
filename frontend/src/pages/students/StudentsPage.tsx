@@ -20,6 +20,8 @@ import {
   UserPlus,
   UserCheck,
   KeyRound,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import {
   AcademicYearsApi,
@@ -53,8 +55,7 @@ const STUDENT_STATUSES = ['active', 'inactive', 'transferred', 'alumni'] as cons
 const schema = z
   .object({
     admissionNumber: z.string().min(1, 'Required'),
-    firstName: z.string().min(1, 'Required'),
-    lastName: z.string().min(1, 'Required'),
+    studentName: z.string().min(1, 'Required').max(100),
     dateOfBirth: z.string().min(1, 'Required'),
     gender: z.enum(GENDERS),
     bloodGroup: z.string().optional().or(z.literal('')),
@@ -109,13 +110,15 @@ export function StudentsPage() {
   const [yearFilter, setYearFilter] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const [sectionFilter, setSectionFilter] = useState('');
+  const [sortBy, setSortBy] = useState('admissionNumber');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
 
-  // Reset to the first page whenever the filters or search change.
+  // Reset to the first page whenever the filters, sort or search change.
   useEffect(() => {
     setPage(1);
-  }, [search, yearFilter, classFilter, sectionFilter, limit]);
+  }, [search, yearFilter, classFilter, sectionFilter, sortBy, sortOrder, limit]);
 
   const { data: years = [] } = useQuery({
     queryKey: ['academic-years'],
@@ -153,6 +156,8 @@ export function StudentsPage() {
     academicYearId: effectiveYearId || undefined,
     classId: classFilter || undefined,
     sectionId: sectionFilter || undefined,
+    sortBy,
+    sortOrder,
   };
 
   const { data: pageData, isLoading } = useQuery({
@@ -164,6 +169,8 @@ export function StudentsPage() {
       effectiveYearId,
       classFilter,
       sectionFilter,
+      sortBy,
+      sortOrder,
     ],
     queryFn: () => StudentsApi.list(listParams),
     placeholderData: keepPreviousData,
@@ -338,6 +345,34 @@ export function StudentsPage() {
             </option>
           ))}
         </Select>
+
+        <div className="ml-auto flex items-center gap-1">
+          <Select
+            className="!w-44"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            title="Sort students by"
+          >
+            <option value="admissionNumber">Sort: Admission #</option>
+            <option value="rollNumber">Sort: Roll #</option>
+            <option value="studentName">Sort: Name</option>
+            <option value="createdAt">Sort: Newest</option>
+          </Select>
+          <button
+            type="button"
+            className="rounded-md border border-slate-200 p-2 text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+            onClick={() =>
+              setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))
+            }
+            title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+          >
+            {sortOrder === 'asc' ? (
+              <ArrowUp className="h-4 w-4" />
+            ) : (
+              <ArrowDown className="h-4 w-4" />
+            )}
+          </button>
+        </div>
       </div>
 
       <DataTable<Student>
@@ -365,7 +400,7 @@ export function StudentsPage() {
                   onClick={() => navigate(`/students/${s.id}`)}
                   title="View profile"
                 >
-                  {s.firstName} {s.lastName}
+                  {s.studentName}
                 </button>
                 <div className="text-xs text-slate-500 capitalize">
                   {s.gender}
@@ -485,7 +520,7 @@ export function StudentsPage() {
         onClose={() => setPinModal({ open: false })}
         subject={
           pinModal.student
-            ? `${pinModal.student.firstName} ${pinModal.student.lastName}`
+            ? pinModal.student.studentName
             : ''
         }
         loginHint={`Logs in with admission # ${pinModal.student?.admissionNumber ?? ''}`}
@@ -531,7 +566,7 @@ export function StudentsPage() {
         onConfirm={() => confirm.student && remove.mutate(confirm.student.id)}
         loading={remove.isPending}
         title="Delete student?"
-        message={`Soft-delete ${confirm.student?.firstName} ${confirm.student?.lastName}. Records remain in the database for compliance.`}
+        message={`Soft-delete ${confirm.student?.studentName}. Records remain in the database for compliance.`}
         confirmText="Delete student"
       />
     </>

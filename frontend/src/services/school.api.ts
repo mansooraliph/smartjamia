@@ -94,8 +94,7 @@ export interface Student {
   schoolId: string;
   userId?: string | null; // set when portal (PIN) access is enabled
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
   dateOfBirth: string;
   gender: 'male' | 'female' | 'other';
   bloodGroup: string | null;
@@ -370,8 +369,7 @@ export type VisitorGender = 'male' | 'female' | 'other';
 export interface VisitorStudentRef {
   id: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
 }
 
 export interface Visitor {
@@ -705,8 +703,7 @@ export const SubjectsApi = {
 export interface StudentLookup {
   id: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
   status: Student['status'];
 }
 
@@ -738,6 +735,8 @@ export const StudentsApi = {
     unwrap(await api.patch(`/school/students/${id}`, data)),
   remove: async (id: string) =>
     unwrap(await api.delete(`/school/students/${id}`)),
+  deleteAll: async (): Promise<{ deleted: number; related: number }> =>
+    unwrap(await api.delete('/school/students/all')),
   setPin: async (id: string, pin: string) =>
     unwrap(await api.post(`/school/students/${id}/portal-pin`, { pin })),
   removePin: async (id: string) =>
@@ -750,12 +749,21 @@ export const StudentsApi = {
       'student-import-template',
       'xlsx',
     ),
+  importInspect: async (file: File): Promise<ImportInspect> => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return unwrap(await api.post('/school/students/import/inspect', fd));
+  },
   importPreview: async (
     file: File,
     academicYearId?: string,
+    mapping?: ImportMapping,
+    duplicates: DuplicateMode = 'skip',
   ): Promise<ImportPreview> => {
     const fd = new FormData();
     fd.append('file', file);
+    if (mapping) fd.append('mapping', JSON.stringify(mapping));
+    fd.append('duplicates', duplicates);
     return unwrap(
       await api.post('/school/students/import/preview', fd, {
         params: academicYearId ? { academicYearId } : undefined,
@@ -765,9 +773,13 @@ export const StudentsApi = {
   importCommit: async (
     file: File,
     academicYearId?: string,
+    mapping?: ImportMapping,
+    duplicates: DuplicateMode = 'skip',
   ): Promise<ImportCommitResult> => {
     const fd = new FormData();
     fd.append('file', file);
+    if (mapping) fd.append('mapping', JSON.stringify(mapping));
+    fd.append('duplicates', duplicates);
     return unwrap(
       await api.post('/school/students/import/commit', fd, {
         params: academicYearId ? { academicYearId } : undefined,
@@ -867,22 +879,43 @@ export const DocumentsApi = {
 };
 
 // ───── Academics: bulk-enroll & promotion ───────────────────────────────────
+export type DuplicateMode = 'skip' | 'import';
 export interface ImportRowResult {
   rowNumber: number;
   data: Record<string, string>;
   errors: string[];
+  warnings: string[];
   willEnroll: boolean;
+  willImport: boolean;
+  duplicate: boolean;
   autoAdmissionNumber: boolean;
 }
 export interface ImportPreview {
   rows: ImportRowResult[];
-  summary: { total: number; valid: number; invalid: number };
+  summary: {
+    total: number;
+    valid: number;
+    invalid: number;
+    duplicates: number;
+  };
 }
 export interface ImportCommitResult {
   created: number;
   skipped: number;
   errors: { rowNumber: number; error: string }[];
 }
+export interface ImportField {
+  key: string;
+  label: string;
+  required: boolean;
+}
+export interface ImportInspect {
+  headers: string[];
+  fields: ImportField[];
+  suggested: Record<string, string | null>;
+}
+/** field key → exact Excel header text that supplies it. */
+export type ImportMapping = Record<string, string>;
 
 export interface PromotionSourceClass {
   id: string;
@@ -894,8 +927,7 @@ export interface PromotionSourceClass {
 export interface PromotionClassStudent {
   id: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
   rollNumber: string | null;
 }
 export type PromotionAction = 'promote' | 'detain' | 'transfer';
@@ -965,8 +997,7 @@ export interface Parent {
   student: {
     id: string;
     admissionNumber: string;
-    firstName: string;
-    lastName: string;
+    studentName: string;
   } | null;
 }
 
@@ -1033,8 +1064,7 @@ export interface TransferCertificate {
   student: {
     id: string;
     admissionNumber: string;
-    firstName: string;
-    lastName: string;
+    studentName: string;
     status: Student['status'];
   } | null;
 }
@@ -1085,8 +1115,7 @@ export type AttendanceStatus =
 export interface SectionAttendanceRow {
   studentId: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
   rollNumber: string | null;
   status: AttendanceStatus | null;
   note: string | null;
@@ -1243,8 +1272,7 @@ export interface MarksGridSubject {
 export interface MarksGridStudent {
   id: string;
   admissionNumber: string;
-  firstName: string;
-  lastName: string;
+  studentName: string;
   rollNumber: string | null;
 }
 

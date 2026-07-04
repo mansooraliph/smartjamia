@@ -153,7 +153,7 @@ export function PortalHomePage() {
           <TimetableSection
             enabled={!!student}
             studentName={
-              student ? `${student.firstName} ${student.lastName}` : null
+              student ? student.studentName : null
             }
             admissionNumber={student?.admissionNumber ?? null}
           />
@@ -163,7 +163,7 @@ export function PortalHomePage() {
           <ResultsSection
             enabled={!!student}
             studentName={
-              student ? `${student.firstName} ${student.lastName}` : null
+              student ? student.studentName : null
             }
             admissionNumber={student?.admissionNumber ?? null}
             classLabel={
@@ -786,15 +786,14 @@ function StudentCard({
     <div className="card overflow-hidden">
       <div className="flex items-center gap-3 border-b border-slate-100 bg-brand-50/40 px-5 py-4">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-lg font-bold text-brand-700">
-          {student.firstName[0]}
-          {student.lastName[0]}
+          {student.studentName[0]}
         </div>
         <div>
           <div className="text-xs font-medium uppercase tracking-wide text-slate-400">
             {heading}
           </div>
           <div className="text-lg font-bold text-slate-900">
-            {student.firstName} {student.lastName}
+            {student.studentName}
           </div>
         </div>
       </div>

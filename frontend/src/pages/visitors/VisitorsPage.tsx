@@ -157,7 +157,7 @@ export function VisitorsPage() {
           <option value="">All students</option>
           {studentOptions.map((s) => (
             <option key={s.id} value={s.id}>
-              {s.admissionNumber} · {s.firstName} {s.lastName}
+              {s.admissionNumber} · {s.studentName}
             </option>
           ))}
         </Select>
@@ -195,7 +195,7 @@ export function VisitorsPage() {
               v.student ? (
                 <div className="leading-tight">
                   <div className="text-sm text-slate-900">
-                    {v.student.firstName} {v.student.lastName}
+                    {v.student.studentName}
                   </div>
                   <div className="text-xs text-slate-500">
                     {v.student.admissionNumber}
@@ -261,7 +261,7 @@ export function VisitorsPage() {
         visitor={modal.visitor}
         students={studentOptions.map((s) => ({
           id: s.id,
-          label: `${s.admissionNumber} · ${s.firstName} ${s.lastName}`,
+          label: `${s.admissionNumber} · ${s.studentName}`,
         }))}
         defaultStudentId={studentFilter}
         saving={upsert.isPending}

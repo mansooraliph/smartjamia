@@ -62,7 +62,7 @@ export class VisitsService {
     if (opts.search) {
       const t = `%${opts.search.trim()}%`;
       qb.andWhere(
-        '(vs.name ILIKE :t OR vs.mobile ILIKE :t OR st.firstName ILIKE :t OR st.lastName ILIKE :t OR vt.purpose ILIKE :t OR vt.passNumber ILIKE :t OR vt.meetingWith ILIKE :t)',
+        '(vs.name ILIKE :t OR vs.mobile ILIKE :t OR st.studentName ILIKE :t OR vt.purpose ILIKE :t OR vt.passNumber ILIKE :t OR vt.meetingWith ILIKE :t)',
         { t },
       );
     }
@@ -107,8 +107,7 @@ export class VisitsService {
           ? {
               id: st.id,
               admissionNumber: st.admissionNumber,
-              firstName: st.firstName,
-              lastName: st.lastName,
+              studentName: st.studentName,
             }
           : null,
       };
@@ -141,7 +140,7 @@ export class VisitsService {
         mobile: v.visitor?.mobile ?? '',
         relation: v.visitor?.relation ?? '',
         student: v.student
-          ? `${v.student.firstName} ${v.student.lastName}`
+          ? v.student.studentName
           : '',
         admissionNumber: v.student?.admissionNumber ?? '',
         meetingWith: v.meetingWith ?? '',
