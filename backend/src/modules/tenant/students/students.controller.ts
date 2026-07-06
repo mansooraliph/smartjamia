@@ -136,6 +136,8 @@ export class StudentsController {
     @Query('academicYearId') academicYearId?: string,
     @Body('mapping') mapping?: string,
     @Body('duplicates') duplicates?: string,
+    @Body('classId') classId?: string,
+    @Body('sectionId') sectionId?: string,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.importer.preview(
@@ -145,6 +147,8 @@ export class StudentsController {
       academicYearId || undefined,
       this.parseMapping(mapping),
       duplicates === 'import' ? 'import' : 'skip',
+      classId || undefined,
+      sectionId || undefined,
     );
   }
 
@@ -159,6 +163,8 @@ export class StudentsController {
     @Query('academicYearId') academicYearId?: string,
     @Body('mapping') mapping?: string,
     @Body('duplicates') duplicates?: string,
+    @Body('classId') classId?: string,
+    @Body('sectionId') sectionId?: string,
   ) {
     if (!file) throw new BadRequestException('No file uploaded');
     return this.importer.commit(
@@ -168,6 +174,8 @@ export class StudentsController {
       academicYearId || undefined,
       this.parseMapping(mapping),
       duplicates === 'import' ? 'import' : 'skip',
+      classId || undefined,
+      sectionId || undefined,
     );
   }
 

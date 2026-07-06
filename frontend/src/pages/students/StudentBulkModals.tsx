@@ -41,6 +41,8 @@ export function ImportStudentsModal({
 }) {
   const term = useTerminology();
   const [academicYearId, setAcademicYearId] = useState('');
+  const [classId, setClassId] = useState('');
+  const [sectionId, setSectionId] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [inspect, setInspect] = useState<ImportInspect | null>(null);
   const [mapping, setMapping] = useState<ImportMapping>({});
@@ -51,6 +53,19 @@ export function ImportStudentsModal({
     null,
   );
   const [error, setError] = useState<string | null>(null);
+
+  // Target class/section chosen here overrides any class column in the file:
+  // every imported row is enrolled into it. Left empty → use the file's columns.
+  const { data: classes = [] } = useQuery({
+    queryKey: ['classes', academicYearId],
+    queryFn: () => ClassesApi.list(academicYearId),
+    enabled: open && !!academicYearId,
+  });
+  const { data: sections = [] } = useQuery({
+    queryKey: ['sections', classId],
+    queryFn: () => SectionsApi.list(classId),
+    enabled: open && !!classId,
+  });
 
   const reset = () => {
     setFile(null);
@@ -64,6 +79,8 @@ export function ImportStudentsModal({
   useEffect(() => {
     if (open) {
       setAcademicYearId(defaultYear(years));
+      setClassId('');
+      setSectionId('');
       reset();
     }
   }, [open, years]);
@@ -108,6 +125,8 @@ export function ImportStudentsModal({
             academicYearId,
             mapping,
             dupMode,
+            classId || undefined,
+            sectionId || undefined,
           ),
         );
         setResult(null);
@@ -117,6 +136,8 @@ export function ImportStudentsModal({
           academicYearId,
           mapping,
           dupMode,
+          classId || undefined,
+          sectionId || undefined,
         );
         setResult(r);
         onImported();
@@ -138,7 +159,11 @@ export function ImportStudentsModal({
       open={open}
       onClose={onClose}
       title="Import students"
-      description={`Upload the .xlsx template. Rows with a ${term.level} & ${term.group} (matching the selected year) are enrolled automatically.`}
+      description={
+        classId
+          ? `Upload the .xlsx template. Every imported student is enrolled into the ${term.level.toLowerCase()} you selected below.`
+          : `Upload the .xlsx template. Pick a ${term.level.toLowerCase()} below to enroll everyone into it, or leave it as “From file” to use each row’s ${term.level.toLowerCase()} & ${term.group.toLowerCase()} columns.`
+      }
       size="xl"
       footer={
         <>
@@ -182,7 +207,13 @@ export function ImportStudentsModal({
             <Select
               className="!inline-block !w-44"
               value={academicYearId}
-              onChange={(e) => setAcademicYearId(e.target.value)}
+              onChange={(e) => {
+                setAcademicYearId(e.target.value);
+                setClassId('');
+                setSectionId('');
+                setPreview(null);
+                setResult(null);
+              }}
             >
               {years.map((y) => (
                 <option key={y.id} value={y.id}>
@@ -191,6 +222,51 @@ export function ImportStudentsModal({
               ))}
             </Select>
           </div>
+          <div>
+            <label className="mr-2 text-sm text-slate-600">
+              Enroll into {term.level.toLowerCase()}
+            </label>
+            <Select
+              className="!inline-block !w-44"
+              value={classId}
+              onChange={(e) => {
+                setClassId(e.target.value);
+                setSectionId('');
+                setPreview(null); // enrollment target changed → re-validate
+                setResult(null);
+              }}
+            >
+              <option value="">— From file —</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {classLabel(c)}
+                </option>
+              ))}
+            </Select>
+          </div>
+          {classId && (
+            <div>
+              <label className="mr-2 text-sm text-slate-600">
+                {term.group}
+              </label>
+              <Select
+                className="!inline-block !w-40"
+                value={sectionId}
+                onChange={(e) => {
+                  setSectionId(e.target.value);
+                  setPreview(null);
+                  setResult(null);
+                }}
+              >
+                <option value="">— No {term.group.toLowerCase()} —</option>
+                {sections.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
           <div>
             <label className="mr-2 text-sm text-slate-600">
               If a student already exists
