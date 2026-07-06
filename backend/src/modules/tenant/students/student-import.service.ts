@@ -215,10 +215,20 @@ export class StudentImportService {
     academicYearId?: string,
     mapping?: ImportMapping,
     duplicateMode: DuplicateMode = 'skip',
+    overrideClassId?: string,
+    overrideSectionId?: string,
   ): Promise<ImportPreview> {
     return this.tenant.runInSchema(schemaName, async (em) => {
       const raw = await this.parse(buffer, mapping);
-      return this.validate(em, schoolId, raw, academicYearId, duplicateMode);
+      return this.validate(
+        em,
+        schoolId,
+        raw,
+        academicYearId,
+        duplicateMode,
+        overrideClassId,
+        overrideSectionId,
+      );
     });
   }
 
@@ -229,6 +239,8 @@ export class StudentImportService {
     academicYearId?: string,
     mapping?: ImportMapping,
     duplicateMode: DuplicateMode = 'skip',
+    overrideClassId?: string,
+    overrideSectionId?: string,
   ) {
     return this.tenant.runInSchema(schemaName, async (em) => {
       const raw = await this.parse(buffer, mapping);
@@ -238,6 +250,8 @@ export class StudentImportService {
         raw,
         academicYearId,
         duplicateMode,
+        overrideClassId,
+        overrideSectionId,
       );
 
       const studentRepo = em.getRepository(Student);
@@ -296,10 +310,15 @@ export class StudentImportService {
         );
 
         if (row.willEnroll && academicYearId) {
-          const classId = classMap.get(d.className.toLowerCase());
-          const section = d.sectionName
-            ? sectionMap.get(`${classId}|${d.sectionName.toLowerCase()}`)
-            : undefined;
+          // A class chosen in the import modal wins over the file's columns.
+          const classId = overrideClassId
+            ? overrideClassId
+            : classMap.get(d.className.toLowerCase());
+          const section = overrideClassId
+            ? (overrideSectionId ?? undefined)
+            : d.sectionName
+              ? sectionMap.get(`${classId}|${d.sectionName.toLowerCase()}`)
+              : undefined;
           if (classId) {
             await enrolRepo.save(
               enrolRepo.create({
@@ -439,6 +458,8 @@ export class StudentImportService {
     raw: Record<string, string>[],
     academicYearId?: string,
     duplicateMode: DuplicateMode = 'skip',
+    overrideClassId?: string,
+    overrideSectionId?: string,
   ): Promise<ImportPreview> {
     const existing = await em.getRepository(Student).find({
       where: { schoolId },
@@ -457,6 +478,32 @@ export class StudentImportService {
 
     const classMap = await this.classMap(em, schoolId, academicYearId);
     const sectionMap = await this.sectionMap(em, schoolId);
+
+    // A class picked in the import modal enrolls every row into it, overriding
+    // any class/section columns in the file. Validate the selection up front —
+    // it's a configuration error, not a per-row problem.
+    if (overrideClassId) {
+      if (!academicYearId) {
+        throw new BadRequestException(
+          'Select an academic year to enroll into the chosen class',
+        );
+      }
+      if (![...classMap.values()].includes(overrideClassId)) {
+        throw new BadRequestException(
+          'Selected class not found in the chosen academic year',
+        );
+      }
+      if (
+        overrideSectionId &&
+        ![...sectionMap.entries()].some(
+          ([k, v]) => v === overrideSectionId && k.startsWith(`${overrideClassId}|`),
+        )
+      ) {
+        throw new BadRequestException(
+          'Selected section does not belong to the chosen class',
+        );
+      }
+    }
 
     const rows: ImportRowResult[] = raw.map((d) => {
       const errors: string[] = [];
@@ -505,9 +552,13 @@ export class StudentImportService {
         }
       }
 
-      // Enrollment columns: class is required to enroll; section is optional.
+      // Enrollment: a class chosen in the modal enrolls every valid row into
+      // it (file class/section columns are ignored). Otherwise fall back to the
+      // file's own class/section columns.
       let willEnroll = false;
-      if (d.className || d.sectionName) {
+      if (overrideClassId) {
+        willEnroll = true;
+      } else if (d.className || d.sectionName) {
         if (!academicYearId) {
           errors.push(
             'Select an academic year to enroll students by class/section',

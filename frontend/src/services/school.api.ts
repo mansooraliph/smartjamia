@@ -759,11 +759,15 @@ export const StudentsApi = {
     academicYearId?: string,
     mapping?: ImportMapping,
     duplicates: DuplicateMode = 'skip',
+    classId?: string,
+    sectionId?: string,
   ): Promise<ImportPreview> => {
     const fd = new FormData();
     fd.append('file', file);
     if (mapping) fd.append('mapping', JSON.stringify(mapping));
     fd.append('duplicates', duplicates);
+    if (classId) fd.append('classId', classId);
+    if (sectionId) fd.append('sectionId', sectionId);
     return unwrap(
       await api.post('/school/students/import/preview', fd, {
         params: academicYearId ? { academicYearId } : undefined,
@@ -775,11 +779,15 @@ export const StudentsApi = {
     academicYearId?: string,
     mapping?: ImportMapping,
     duplicates: DuplicateMode = 'skip',
+    classId?: string,
+    sectionId?: string,
   ): Promise<ImportCommitResult> => {
     const fd = new FormData();
     fd.append('file', file);
     if (mapping) fd.append('mapping', JSON.stringify(mapping));
     fd.append('duplicates', duplicates);
+    if (classId) fd.append('classId', classId);
+    if (sectionId) fd.append('sectionId', sectionId);
     return unwrap(
       await api.post('/school/students/import/commit', fd, {
         params: academicYearId ? { academicYearId } : undefined,
