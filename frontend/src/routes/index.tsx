@@ -37,9 +37,14 @@ import { PortalLoginPage } from '@/pages/portal/PortalLoginPage';
 import { PortalHomePage } from '@/pages/portal/PortalHomePage';
 import { SuperadminLoginPage } from '@/pages/superadmin/SuperadminLoginPage';
 import { SuperadminLayout } from '@/components/superadmin/SuperadminLayout';
+import { OrgLoginPage } from '@/pages/org/OrgLoginPage';
+import { OrgDashboardPage } from '@/pages/org/OrgDashboardPage';
+import { AccountLoginPage } from '@/pages/account/AccountLoginPage';
 import { OverviewPage } from '@/pages/superadmin/OverviewPage';
 import { PlansPage } from '@/pages/superadmin/PlansPage';
 import { SchoolsPage } from '@/pages/superadmin/SchoolsPage';
+import { OrganizationsPage } from '@/pages/superadmin/OrganizationsPage';
+import { OrganizationDetailPage } from '@/pages/superadmin/OrganizationDetailPage';
 import { BranchesPage } from '@/pages/superadmin/BranchesPage';
 import { SubscriptionsPage } from '@/pages/superadmin/SubscriptionsPage';
 import { BiometricDevicesPage as SaBiometricDevicesPage } from '@/pages/superadmin/BiometricDevicesPage';
@@ -82,12 +87,42 @@ function SuperadminRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function OrgRoute({ children }: { children: React.ReactNode }) {
+  const user = useAuthStore((s) => s.user);
+  const orgToken = useAuthStore((s) => s.orgToken);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
+  if (!isAuthenticated) {
+    return <Navigate to="/org/login" replace />;
+  }
+  if (user?.scope === 'organization') {
+    return <>{children}</>;
+  }
+  // A tenant session that still holds org origin context is mid-transition
+  // (an org admin entering one of its schools). Don't bounce to /org/login —
+  // render nothing and let the in-flight navigate('/dashboard') win.
+  if (orgToken) {
+    return null;
+  }
+  return <Navigate to="/org/login" replace />;
+}
+
 export function AppRoutes() {
   return (
     <Routes>
       {/* Student / Parent PIN portal */}
       <Route path="/portal/login" element={<PortalLoginPage />} />
       <Route path="/portal" element={<PortalHomePage />} />
+
+      {/* Organization admin portal */}
+      <Route path="/org/login" element={<OrgLoginPage />} />
+      <Route
+        path="/org"
+        element={
+          <OrgRoute>
+            <OrgDashboardPage />
+          </OrgRoute>
+        }
+      />
 
       {/* Superadmin portal */}
       <Route path="/superadmin/login" element={<SuperadminLoginPage />} />
@@ -100,6 +135,8 @@ export function AppRoutes() {
         }
       >
         <Route index element={<OverviewPage />} />
+        <Route path="organizations" element={<OrganizationsPage />} />
+        <Route path="organizations/:id" element={<OrganizationDetailPage />} />
         <Route path="schools" element={<SchoolsPage />} />
         <Route path="branches" element={<BranchesPage />} />
         <Route path="biometric-devices" element={<SaBiometricDevicesPage />} />
@@ -131,6 +168,9 @@ export function AppRoutes() {
         <Route path="pricing" element={<PricingPage />} />
         <Route path="signup" element={<SignupPage />} />
       </Route>
+
+      {/* Multi-school account login (one login → many schools) */}
+      <Route path="/account/login" element={<AccountLoginPage />} />
 
       {/* School-tenant portal */}
       <Route path="/login" element={<LoginPage />} />

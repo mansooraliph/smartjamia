@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Building2,
+  Network,
   GitBranch,
   CreditCard,
   ReceiptText,
@@ -20,6 +21,7 @@ import { cn } from '@/lib/cn';
 
 const navItems = [
   { to: '/superadmin', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: '/superadmin/organizations', label: 'Organizations', icon: Network },
   { to: '/superadmin/schools', label: 'Schools', icon: Building2 },
   { to: '/superadmin/branches', label: 'Branches', icon: GitBranch },
   { to: '/superadmin/plans', label: 'Plans', icon: CreditCard },

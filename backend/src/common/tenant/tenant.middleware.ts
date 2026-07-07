@@ -56,6 +56,7 @@ export class TenantMiddleware implements NestMiddleware {
       path === '/api/v1/health' ||
       path.startsWith('/api/v1/auth') ||
       path.startsWith('/api/v1/superadmin') ||
+      path.startsWith('/api/v1/org') ||
       path.startsWith('/api/v1/portal') ||
       path.startsWith('/api/v1/public')
     );

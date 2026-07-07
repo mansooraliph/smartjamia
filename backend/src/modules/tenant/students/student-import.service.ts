@@ -61,6 +61,39 @@ export const IMPORT_FIELDS: ImportField[] = [
   { key: 'rollNumber', label: 'Roll Number', required: false },
 ];
 
+// Max length (chars) of the DB columns the importer writes into. Used to turn a
+// would-be "value too long for type character varying(N)" DB crash into a clear,
+// skippable per-row error. Keep in sync with the entity @Column lengths.
+const FIELD_MAX_LENGTH: Record<string, number> = {
+  admissionNumber: 50,
+  studentName: 100,
+  bloodGroup: 5,
+  religion: 50,
+  caste: 50,
+  aadharNumber: 12,
+  mobileCountryCode: 8,
+  mobile: 20,
+  whatsappCountryCode: 8,
+  whatsapp: 20,
+  city: 100,
+  state: 100,
+  pincode: 10,
+  previousSchool: 255,
+  rollNumber: 20,
+};
+
+/**
+ * Normalize a phone-like value to a leading `+` (if present) followed by digits,
+ * dropping spaces, dashes, brackets and dots so formatting can't overflow the
+ * column. `+91 98765-43210` → `+919876543210`.
+ */
+function normalizePhone(s: string): string {
+  const trimmed = String(s ?? '').trim();
+  const hasPlus = trimmed.startsWith('+');
+  const digits = trimmed.replace(/\D/g, '');
+  return hasPlus ? `+${digits}` : digits;
+}
+
 /** Lower-case a header and strip spaces/underscores for tolerant matching. */
 function normalizeHeader(s: string): string {
   return String(s ?? '')
@@ -475,6 +508,7 @@ export class StudentImportService {
     );
     const seenInFile = new Set<string>();
     const seenNameDob = new Set<string>();
+    const labelByKey = new Map(IMPORT_FIELDS.map((f) => [f.key, f.label]));
 
     const classMap = await this.classMap(em, schoolId, academicYearId);
     const sectionMap = await this.sectionMap(em, schoolId);
@@ -524,6 +558,20 @@ export class StudentImportService {
       else if (!GENDERS.has(gender))
         errors.push('Gender must be male, female or other');
       else d.gender = gender;
+
+      // Normalize phone-like fields so formatting can't overflow the column.
+      if (d.mobile) d.mobile = normalizePhone(d.mobile);
+      if (d.whatsapp) d.whatsapp = normalizePhone(d.whatsapp);
+
+      // Guard column limits — a clear per-row error beats a raw DB crash
+      // ("value too long for type character varying(N)").
+      for (const [key, max] of Object.entries(FIELD_MAX_LENGTH)) {
+        const val = d[key];
+        if (val && val.length > max) {
+          const label = labelByKey.get(key) ?? key;
+          errors.push(`${label} is too long (max ${max} characters)`);
+        }
+      }
 
       const autoAdmissionNumber = !d.admissionNumber;
       if (d.admissionNumber) {

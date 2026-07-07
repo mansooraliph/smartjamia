@@ -67,6 +67,14 @@ export class CreateSchoolDto {
   @IsUUID()
   planId?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Owning organization. When set, the org’s max_schools_allowed limit is enforced.',
+  })
+  @IsOptional()
+  @IsUUID()
+  organizationId?: string;
+
   @ApiPropertyOptional({ enum: SCHOOL_STATUSES, default: 'trial' })
   @IsOptional()
   @IsEnum(SCHOOL_STATUSES)
