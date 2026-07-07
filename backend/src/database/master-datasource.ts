@@ -7,6 +7,10 @@ config({ path: join(process.cwd(), '.env') });
 config({ path: join(process.cwd(), '..', '.env') });
 
 import { School } from './master/school.entity';
+import { Organization } from './master/organization.entity';
+import { OrganizationAdmin } from './master/organization-admin.entity';
+import { UserAccount } from './master/user-account.entity';
+import { SchoolAccessGrant } from './master/school-access-grant.entity';
 import { Plan } from './master/plan.entity';
 import { Subscription } from './master/subscription.entity';
 import { PlatformInvoice } from './master/platform-invoice.entity';
@@ -27,6 +31,10 @@ export const masterDataSourceOptions: DataSourceOptions = {
   database: process.env.MASTER_DB_NAME || 'edupro_master',
   entities: [
     School,
+    Organization,
+    OrganizationAdmin,
+    UserAccount,
+    SchoolAccessGrant,
     Plan,
     Subscription,
     PlatformInvoice,

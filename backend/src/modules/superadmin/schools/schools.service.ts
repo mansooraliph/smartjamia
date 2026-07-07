@@ -6,13 +6,14 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, ILike, Repository } from 'typeorm';
 import slugify from 'slugify';
 import * as bcrypt from 'bcrypt';
 import { School } from '../../../database/master/school.entity';
 import { Plan } from '../../../database/master/plan.entity';
 import { User } from '../../../database/tenant/user.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
 
@@ -25,13 +26,15 @@ export class SchoolsService {
     @InjectDataSource('master') ds: DataSource,
     private readonly tenantSchema: TenantSchemaService,
     private readonly config: ConfigService,
+    private readonly organizations: OrganizationsService,
   ) {
     this.repo = ds.getRepository(School);
     this.planRepo = ds.getRepository(Plan);
   }
 
-  list() {
+  list(organizationId?: string) {
     return this.repo.find({
+      where: organizationId ? { organizationId } : {},
       relations: { plan: true },
       order: { createdAt: 'DESC' },
     });
@@ -49,6 +52,20 @@ export class SchoolsService {
   async create(dto: CreateSchoolDto) {
     const slug = (dto.slug ?? this.generateSlug(dto.name)).toLowerCase();
     const code = (dto.code ?? this.generateCode(dto.name)).toUpperCase();
+
+    // Organization scope: enforce the school limit and per-org name uniqueness
+    // BEFORE any writes. (No-op for platform-direct schools with no org.)
+    if (dto.organizationId) {
+      await this.organizations.assertCanCreateSchool(dto.organizationId);
+      const nameDup = await this.repo.findOne({
+        where: { organizationId: dto.organizationId, name: ILike(dto.name) },
+      });
+      if (nameDup) {
+        throw new ConflictException(
+          'A school with this name already exists in this organization',
+        );
+      }
+    }
 
     if (await this.repo.findOne({ where: { slug } })) {
       throw new ConflictException('School slug already exists');
@@ -80,6 +97,7 @@ export class SchoolsService {
         phone: dto.phone ?? null,
         logoUrl: dto.logoUrl ?? null,
         planId: dto.planId ?? null,
+        organizationId: dto.organizationId ?? null,
         schemaName: 'shared_pool',
         isSchemaProvisioned: false,
         status: dto.status ?? 'trial',

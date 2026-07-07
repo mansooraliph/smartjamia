@@ -30,6 +30,7 @@ import { useTerminology } from '@/hooks/useTerminology';
 import { usePermissions } from '@/hooks/usePermissions';
 import { canAccessPath } from '@/lib/access';
 import { TrialBanner } from './TrialBanner';
+import { SchoolSwitcher } from './SchoolSwitcher';
 import { cn } from '@/lib/cn';
 
 interface NavItem {
@@ -228,13 +229,16 @@ export function SchoolLayout() {
       <div className="flex flex-1 flex-col">
         {/* Top bar */}
         <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-6">
-          <div className="relative w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              placeholder="Search students, staff…"
-              className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:bg-white focus:ring-1 focus:ring-brand-400"
-            />
+          <div className="flex items-center gap-3">
+            <SchoolSwitcher />
+            <div className="relative w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                placeholder="Search students, staff…"
+                className="w-full rounded-md border border-slate-200 bg-slate-50 py-1.5 pl-9 pr-3 text-sm outline-none focus:border-brand-400 focus:bg-white focus:ring-1 focus:ring-brand-400"
+              />
+            </div>
           </div>
 
           <div className="flex items-center gap-3">

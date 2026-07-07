@@ -19,12 +19,25 @@ import { BranchesService } from './branches/branches.service';
 import { StatsController } from './stats/stats.controller';
 import { StatsService } from './stats/stats.service';
 
+import { OrganizationsController } from './organizations/organizations.controller';
+import { OrganizationsService } from './organizations/organizations.service';
+
+import { IdentityController } from './identity/identity.controller';
+import { IdentityService } from './identity/identity.service';
+
+import { OrgPortalController } from './organization-portal/org-portal.controller';
+import { OrgPortalService } from './organization-portal/org-portal.service';
+
 import { SuperadminGuard } from '../../common/guards/superadmin.guard';
+import { OrganizationGuard } from '../../common/guards/organization.guard';
 
 @Module({
   controllers: [
     PlansController,
     SchoolsController,
+    OrganizationsController,
+    IdentityController,
+    OrgPortalController,
     SubscriptionsController,
     BranchesController,
     StatsController,
@@ -34,11 +47,15 @@ import { SuperadminGuard } from '../../common/guards/superadmin.guard';
     PlansService,
     SchoolsService,
     SchoolProvisioningService,
+    OrganizationsService,
+    IdentityService,
+    OrgPortalService,
     SubscriptionsService,
     BranchesService,
     StatsService,
     MaintenanceService,
     SuperadminGuard,
+    OrganizationGuard,
   ],
 })
 export class SuperadminModule {}

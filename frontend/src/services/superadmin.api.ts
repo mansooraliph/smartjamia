@@ -32,6 +32,7 @@ export interface School {
   logoUrl: string | null;
   planId: string | null;
   plan?: Plan | null;
+  organizationId: string | null;
   schemaName: string;
   isSchemaProvisioned: boolean;
   status: 'trial' | 'active' | 'grace_period' | 'suspended' | 'cancelled';
@@ -48,6 +49,40 @@ export interface CreateSchoolPayload extends Partial<School> {
   ownerName?: string;
   ownerEmail?: string;
   ownerPassword?: string;
+}
+
+export type OrganizationStatus = 'active' | 'inactive';
+
+export interface Organization {
+  id: string;
+  name: string;
+  adminName: string | null;
+  adminEmail: string;
+  adminPhone: string | null;
+  maxSchoolsAllowed: number; // -1 = unlimited
+  status: OrganizationStatus;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+  /** Schools currently occupying a slot — present on list/get responses. */
+  schoolsUsed: number;
+}
+
+export interface CreateOrganizationPayload {
+  name: string;
+  adminName?: string;
+  adminEmail: string;
+  adminPhone?: string;
+  maxSchoolsAllowed: number;
+  status?: OrganizationStatus;
+  /** If set, also creates the org-admin login with this password. */
+  adminPassword?: string;
+}
+
+export interface UpdateOrganizationPayload
+  extends Partial<CreateOrganizationPayload> {
+  /** Confirm lowering maxSchoolsAllowed below current usage. */
+  force?: boolean;
 }
 
 export interface Branch {
@@ -130,6 +165,10 @@ export const PlansApi = {
 export const SchoolsApi = {
   list: async (): Promise<School[]> =>
     unwrap(await api.get('/superadmin/schools')),
+  listByOrg: async (organizationId: string): Promise<School[]> =>
+    unwrap(
+      await api.get('/superadmin/schools', { params: { organizationId } }),
+    ),
   get: async (id: string): Promise<School> =>
     unwrap(await api.get(`/superadmin/schools/${id}`)),
   create: async (data: CreateSchoolPayload): Promise<School> =>
@@ -155,6 +194,46 @@ export const SchoolsApi = {
     data: { name?: string; email?: string; password?: string },
   ): Promise<{ id: string; name: string; email: string; created: boolean }> =>
     unwrap(await api.put(`/superadmin/schools/${id}/owner`, data)),
+};
+
+// ───── Organizations ────────────────────────────────────────────────────────
+export const OrganizationsApi = {
+  list: async (): Promise<Organization[]> =>
+    unwrap(await api.get('/superadmin/organizations')),
+  get: async (id: string): Promise<Organization> =>
+    unwrap(await api.get(`/superadmin/organizations/${id}`)),
+  create: async (data: CreateOrganizationPayload): Promise<Organization> =>
+    unwrap(await api.post('/superadmin/organizations', data)),
+  update: async (
+    id: string,
+    data: UpdateOrganizationPayload,
+  ): Promise<Organization> =>
+    unwrap(await api.patch(`/superadmin/organizations/${id}`, data)),
+  deactivate: async (
+    id: string,
+    suspendSchools: boolean,
+  ): Promise<{ id: string; status: OrganizationStatus; schoolsSuspended: number }> =>
+    unwrap(
+      await api.patch(`/superadmin/organizations/${id}/deactivate`, {
+        suspendSchools,
+      }),
+    ),
+  activate: async (
+    id: string,
+  ): Promise<{ id: string; status: OrganizationStatus; schoolsRestored: number }> =>
+    unwrap(await api.patch(`/superadmin/organizations/${id}/activate`)),
+  remove: async (id: string) =>
+    unwrap(await api.delete(`/superadmin/organizations/${id}`)),
+  availableSchools: async (id: string): Promise<School[]> =>
+    unwrap(await api.get(`/superadmin/organizations/${id}/available-schools`)),
+  attachSchool: async (id: string, schoolId: string): Promise<School> =>
+    unwrap(
+      await api.post(`/superadmin/organizations/${id}/schools/attach`, {
+        schoolId,
+      }),
+    ),
+  detachSchool: async (id: string, schoolId: string) =>
+    unwrap(await api.delete(`/superadmin/organizations/${id}/schools/${schoolId}`)),
 };
 
 // ───── Platform maintenance ─────────────────────────────────────────────────

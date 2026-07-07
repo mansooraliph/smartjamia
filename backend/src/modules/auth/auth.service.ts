@@ -1,6 +1,7 @@
 import {
   ForbiddenException,
   Injectable,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
@@ -9,20 +10,39 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { Superadmin } from '../../database/master/superadmin.entity';
-import { User } from '../../database/tenant/user.entity';
+import { School } from '../../database/master/school.entity';
+import { Organization } from '../../database/master/organization.entity';
+import { OrganizationAdmin } from '../../database/master/organization-admin.entity';
+import { UserAccount } from '../../database/master/user-account.entity';
+import { SchoolAccessGrant } from '../../database/master/school-access-grant.entity';
+import { User, UserRole } from '../../database/tenant/user.entity';
 import { Student } from '../../database/tenant/student.entity';
 import { Parent } from '../../database/tenant/parent.entity';
 import { Role } from '../../database/tenant/role.entity';
 import { TenantResolverService } from '../../common/tenant/tenant-resolver.service';
 import { TenantSchemaService } from '../../common/tenant/tenant-schema.service';
+import { TenantUserService } from '../../common/tenant/tenant-user.service';
 import {
   isSystemRole,
   systemRole,
 } from '../../common/rbac/permissions';
 
+/** Minimal tenant context a tenant session is built from. */
+interface TenantLike {
+  schoolId: string;
+  slug: string;
+  schemaName: string;
+  status: string;
+}
+
 @Injectable()
 export class AuthService {
   private readonly superadminRepo: Repository<Superadmin>;
+  private readonly schoolRepo: Repository<School>;
+  private readonly orgRepo: Repository<Organization>;
+  private readonly orgAdminRepo: Repository<OrganizationAdmin>;
+  private readonly accountRepo: Repository<UserAccount>;
+  private readonly grantRepo: Repository<SchoolAccessGrant>;
 
   constructor(
     @InjectDataSource('master') private readonly master: DataSource,
@@ -30,8 +50,14 @@ export class AuthService {
     private readonly config: ConfigService,
     private readonly tenantResolver: TenantResolverService,
     private readonly tenantSchema: TenantSchemaService,
+    private readonly tenantUser: TenantUserService,
   ) {
     this.superadminRepo = master.getRepository(Superadmin);
+    this.schoolRepo = master.getRepository(School);
+    this.orgRepo = master.getRepository(Organization);
+    this.orgAdminRepo = master.getRepository(OrganizationAdmin);
+    this.accountRepo = master.getRepository(UserAccount);
+    this.grantRepo = master.getRepository(SchoolAccessGrant);
   }
 
   // ─── Superadmin (platform) ────────────────────────────────────────────────
@@ -109,6 +135,18 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
 
+    return this.buildTenantSession(tenant, user);
+  }
+
+  /**
+   * Build a full tenant session (token + user + permissions) for a resolved
+   * user in a school. Shared by the standard school login and the multi-school
+   * `select-school` flows so they behave identically once a school is chosen.
+   */
+  private async buildTenantSession(
+    tenant: TenantLike,
+    user: Pick<User, 'id' | 'name' | 'email' | 'role' | 'roleKey'>,
+  ) {
     // Effective role + permissions (built-in constants OR a custom role).
     const effectiveRole = user.roleKey || user.role;
     const permissions = await this.tenantSchema.runInSchema(
@@ -156,6 +194,235 @@ export class AuthService {
       },
       tokens: await this.issueTokens(payload),
     };
+  }
+
+  // ─── Multi-school account login ───────────────────────────────────────────
+  /**
+   * Central account login (no school header). Verifies the credential and
+   * returns the list of schools the account may enter — the caller then picks
+   * one via `accountSelectSchool`, which yields a normal tenant session.
+   */
+  async accountLogin(email: string, password: string) {
+    const account = await this.accountRepo
+      .createQueryBuilder('a')
+      .addSelect('a.passwordHash')
+      .where('a.email = :email', { email: email.toLowerCase() })
+      .andWhere('a.deletedAt IS NULL')
+      .getOne();
+
+    if (!account) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+    if (account.status !== 'active') {
+      throw new ForbiddenException('Account is disabled');
+    }
+    const ok = await bcrypt.compare(password, account.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+    await this.accountRepo.update({ id: account.id }, { lastLoginAt: new Date() });
+
+    const payload = {
+      sub: account.id,
+      email: account.email,
+      type: 'access' as const,
+      scope: 'account' as const,
+    };
+    return {
+      account: {
+        id: account.id,
+        name: account.name,
+        email: account.email,
+        scope: 'account' as const,
+      },
+      schools: await this.accountSchools(account.id),
+      tokens: await this.issueTokens(payload),
+    };
+  }
+
+  /** Enter a school this account was granted → a standard tenant session. */
+  async accountSelectSchool(accountId: string, schoolId: string) {
+    const account = await this.accountRepo.findOne({ where: { id: accountId } });
+    if (!account || account.status !== 'active') {
+      throw new ForbiddenException('Account is disabled');
+    }
+    const grant = await this.grantRepo.findOne({
+      where: { userAccountId: accountId, schoolId, status: 'active' },
+    });
+    if (!grant) {
+      throw new ForbiddenException('You do not have access to this school');
+    }
+
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
+    const tenant = this.toTenant(school);
+    this.assertSchoolUsable(tenant);
+
+    // Ensure the mirror tenant user exists (first entry provisions it).
+    let userId = grant.tenantUserId;
+    if (!userId) {
+      userId = await this.tenantUser.ensureUser({
+        schemaName: tenant.schemaName,
+        schoolId: school.id,
+        name: account.name,
+        email: account.email,
+        role: grant.role as UserRole,
+      });
+      await this.grantRepo.update({ id: grant.id }, { tenantUserId: userId });
+    }
+
+    const user = await this.loadMirrorUser(tenant.schemaName, userId);
+    if (!user) throw new NotFoundException('School user not found');
+    return this.buildTenantSession(tenant, user);
+  }
+
+  private async accountSchools(accountId: string) {
+    const grants = await this.grantRepo.find({
+      where: { userAccountId: accountId, status: 'active' },
+      relations: { school: true },
+    });
+    return grants
+      .filter((g) => g.school && !g.school.deletedAt)
+      .map((g) => ({
+        schoolId: g.schoolId,
+        code: g.school.code,
+        slug: g.school.slug,
+        name: g.school.name,
+        role: g.role,
+        status: g.school.status,
+      }));
+  }
+
+  // ─── Organization admin login ─────────────────────────────────────────────
+  async organizationLogin(email: string, password: string) {
+    const admin = await this.orgAdminRepo
+      .createQueryBuilder('a')
+      .addSelect('a.passwordHash')
+      .where('a.email = :email', { email: email.toLowerCase() })
+      .andWhere('a.deletedAt IS NULL')
+      .getOne();
+
+    if (!admin) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+    if (admin.status !== 'active') {
+      throw new ForbiddenException('Account is disabled');
+    }
+    const ok = await bcrypt.compare(password, admin.passwordHash);
+    if (!ok) {
+      throw new UnauthorizedException('Invalid email or password');
+    }
+
+    const org = await this.orgRepo.findOne({
+      where: { id: admin.organizationId },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+    if (org.status !== 'active') {
+      throw new ForbiddenException('Organization is inactive');
+    }
+    await this.orgAdminRepo.update({ id: admin.id }, { lastLoginAt: new Date() });
+
+    const payload = {
+      sub: admin.id,
+      email: admin.email,
+      role: 'organization_admin' as const,
+      type: 'access' as const,
+      scope: 'organization' as const,
+      organizationId: admin.organizationId,
+    };
+    return {
+      admin: {
+        id: admin.id,
+        name: admin.name,
+        email: admin.email,
+        organizationId: admin.organizationId,
+        scope: 'organization' as const,
+      },
+      organization: {
+        id: org.id,
+        name: org.name,
+        maxSchoolsAllowed: org.maxSchoolsAllowed,
+        status: org.status,
+      },
+      schools: await this.orgSchools(admin.organizationId),
+      tokens: await this.issueTokens(payload),
+    };
+  }
+
+  /** Org admin enters one of their org's schools → a tenant session (as admin). */
+  async organizationSelectSchool(
+    adminId: string,
+    organizationId: string,
+    schoolId: string,
+  ) {
+    const org = await this.orgRepo.findOne({ where: { id: organizationId } });
+    if (!org || org.status !== 'active') {
+      throw new ForbiddenException('Organization is inactive');
+    }
+    const admin = await this.orgAdminRepo.findOne({ where: { id: adminId } });
+    if (!admin || admin.status !== 'active') {
+      throw new ForbiddenException('Account is disabled');
+    }
+
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
+    if (school.organizationId !== organizationId) {
+      throw new ForbiddenException('School is not in your organization');
+    }
+    const tenant = this.toTenant(school);
+    this.assertSchoolUsable(tenant);
+
+    // Org admins act as 'admin' in each of their schools. Mirror user is keyed
+    // by email, so repeat entries reuse the same row.
+    const userId = await this.tenantUser.ensureUser({
+      schemaName: tenant.schemaName,
+      schoolId: school.id,
+      name: admin.name,
+      email: admin.email,
+      role: 'admin',
+    });
+    const user = await this.loadMirrorUser(tenant.schemaName, userId);
+    if (!user) throw new NotFoundException('School user not found');
+    return this.buildTenantSession(tenant, user);
+  }
+
+  private async orgSchools(organizationId: string) {
+    const schools = await this.schoolRepo.find({
+      where: { organizationId },
+      order: { createdAt: 'DESC' },
+    });
+    return schools.map((s) => ({
+      schoolId: s.id,
+      code: s.code,
+      slug: s.slug,
+      name: s.name,
+      status: s.status,
+    }));
+  }
+
+  // ─── Shared helpers for school selection ──────────────────────────────────
+  private toTenant(school: School): TenantLike {
+    return {
+      schoolId: school.id,
+      slug: school.slug,
+      schemaName: school.schemaName || 'shared_pool',
+      status: school.status,
+    };
+  }
+
+  private assertSchoolUsable(tenant: TenantLike) {
+    if (tenant.status === 'suspended' || tenant.status === 'cancelled') {
+      throw new ForbiddenException(`School is ${tenant.status}`);
+    }
+  }
+
+  private loadMirrorUser(
+    schemaName: string,
+    userId: string,
+  ): Promise<User | null> {
+    return this.tenantSchema.runInSchema(schemaName, (em) =>
+      em.getRepository(User).findOne({ where: { id: userId } }),
+    );
   }
 
   // ─── Student PIN login (portal) ───────────────────────────────────────────
@@ -277,10 +544,10 @@ export class AuthService {
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
   private async issueTokens(payload: Record<string, unknown>) {
-    const accessExpiresIn = this.config.get<string>('JWT_EXPIRES_IN', '15m');
+    const accessExpiresIn = this.config.get<string>('JWT_EXPIRES_IN', '1d');
     const refreshExpiresIn = this.config.get<string>(
       'JWT_REFRESH_EXPIRES_IN',
-      '7d',
+      '30d',
     );
 
     const accessToken = await this.jwt.signAsync(payload, {

@@ -8,9 +8,15 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiTags,
+} from '@nestjs/swagger';
 import { SuperadminGuard } from '../../../common/guards/superadmin.guard';
 import { SchoolsService } from './schools.service';
 import { SchoolProvisioningService } from './school-provisioning.service';
@@ -29,9 +35,10 @@ export class SchoolsController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all schools' })
-  list() {
-    return this.schools.list();
+  @ApiOperation({ summary: 'List all schools (optionally filtered by org)' })
+  @ApiQuery({ name: 'organizationId', required: false })
+  list(@Query('organizationId') organizationId?: string) {
+    return this.schools.list(organizationId || undefined);
   }
 
   @Get(':id')

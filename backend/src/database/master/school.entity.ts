@@ -10,6 +10,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Plan } from './plan.entity';
+import { Organization } from './organization.entity';
 
 export type SchoolStatus =
   | 'trial'
@@ -19,9 +20,22 @@ export type SchoolStatus =
   | 'cancelled';
 
 @Entity({ name: 'schools' })
+@Index(['organizationId'])
 export class School {
   @PrimaryGeneratedColumn('uuid')
   id: string;
+
+  /**
+   * Owning organization. Nullable — schools created directly by a Super Admin
+   * (platform-direct) have no organization. When set, the org's
+   * `max_schools_allowed` limit applies on creation.
+   */
+  @Column({ type: 'uuid', name: 'organization_id', nullable: true })
+  organizationId: string | null;
+
+  @ManyToOne(() => Organization, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'organization_id' })
+  organization: Organization | null;
 
   @Index({ unique: true })
   @Column({ type: 'varchar', length: 100, unique: true })
@@ -72,6 +86,14 @@ export class School {
     default: 'trial',
   })
   status: SchoolStatus;
+
+  /**
+   * True when this school was suspended as a side-effect of its organization
+   * being deactivated (cascade). Lets org re-activation restore exactly those
+   * schools without touching schools suspended for other reasons.
+   */
+  @Column({ type: 'boolean', name: 'suspended_by_org', default: false })
+  suspendedByOrg: boolean;
 
   @Column({ type: 'timestamp', name: 'trial_starts_at', nullable: true })
   trialStartsAt: Date | null;
