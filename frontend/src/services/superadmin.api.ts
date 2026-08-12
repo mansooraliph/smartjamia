@@ -197,7 +197,28 @@ export const SchoolsApi = {
   /** Issue a tenant session for the school's admin — no password needed. */
   impersonate: async (id: string): Promise<ImpersonationSession> =>
     unwrap(await api.post(`/superadmin/schools/${id}/impersonate`)),
+  getSummary: async (id: string): Promise<SchoolSummary> =>
+    unwrap(await api.get(`/superadmin/schools/${id}/summary`)),
+  getUsers: async (id: string): Promise<SchoolUser[]> =>
+    unwrap(await api.get(`/superadmin/schools/${id}/users`)),
 };
+
+export interface SchoolSummary {
+  studentsCount: number;
+  staffCount: number;
+  classesCount: number;
+  sectionsCount: number;
+}
+
+export interface SchoolUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  isActive: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
 
 /** Tenant session for the school owner, tagged so the UI knows it's borrowed. */
 export interface ImpersonationSession {
@@ -284,8 +305,12 @@ export const BranchesApi = {
 
 // ───── Subscriptions ────────────────────────────────────────────────────────
 export const SubscriptionsApi = {
-  list: async (): Promise<Subscription[]> =>
-    unwrap(await api.get('/superadmin/subscriptions')),
+  list: async (schoolId?: string): Promise<Subscription[]> =>
+    unwrap(
+      await api.get('/superadmin/subscriptions', {
+        params: schoolId ? { schoolId } : undefined,
+      }),
+    ),
   get: async (id: string): Promise<Subscription> =>
     unwrap(await api.get(`/superadmin/subscriptions/${id}`)),
   create: async (data: Partial<Subscription>): Promise<Subscription> =>

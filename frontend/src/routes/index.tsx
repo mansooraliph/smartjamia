@@ -43,6 +43,7 @@ import { AccountLoginPage } from '@/pages/account/AccountLoginPage';
 import { OverviewPage } from '@/pages/superadmin/OverviewPage';
 import { PlansPage } from '@/pages/superadmin/PlansPage';
 import { SchoolsPage } from '@/pages/superadmin/SchoolsPage';
+import { SchoolDetailPage } from '@/pages/superadmin/SchoolDetailPage';
 import { OrganizationsPage } from '@/pages/superadmin/OrganizationsPage';
 import { OrganizationDetailPage } from '@/pages/superadmin/OrganizationDetailPage';
 import { BranchesPage } from '@/pages/superadmin/BranchesPage';
@@ -138,6 +139,7 @@ export function AppRoutes() {
         <Route path="organizations" element={<OrganizationsPage />} />
         <Route path="organizations/:id" element={<OrganizationDetailPage />} />
         <Route path="schools" element={<SchoolsPage />} />
+        <Route path="schools/:id" element={<SchoolDetailPage />} />
         <Route path="branches" element={<BranchesPage />} />
         <Route path="biometric-devices" element={<SaBiometricDevicesPage />} />
         <Route path="plans" element={<PlansPage />} />

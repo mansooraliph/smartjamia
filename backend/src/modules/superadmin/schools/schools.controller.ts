@@ -65,6 +65,20 @@ export class SchoolsController {
     return this.schools.update(id, dto);
   }
 
+  @Get(':id/summary')
+  @ApiOperation({
+    summary: 'Quick counts for the school-detail page (students/staff/classes/sections)',
+  })
+  getSummary(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.schools.getSummary(id);
+  }
+
+  @Get(':id/users')
+  @ApiOperation({ summary: "List this school's tenant login accounts (staff roles)" })
+  getUsers(@Param('id', new ParseUUIDPipe()) id: string) {
+    return this.schools.getUsers(id);
+  }
+
   @Get(':id/owner')
   @ApiOperation({ summary: "Get the school's admin (owner) account" })
   getOwner(@Param('id', new ParseUUIDPipe()) id: string) {

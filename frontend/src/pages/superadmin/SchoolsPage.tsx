@@ -245,10 +245,14 @@ export function SchoolsPage() {
             key: 'name',
             header: 'School',
             render: (s) => (
-              <div className="leading-tight">
+              <button
+                className="leading-tight text-left hover:underline"
+                onClick={() => navigate(`/superadmin/schools/${s.id}`)}
+                title="View school details"
+              >
                 <div className="font-medium text-slate-900">{s.name}</div>
                 <code className="text-xs text-slate-500">{s.slug}</code>
-              </div>
+              </button>
             ),
           },
           {
@@ -291,6 +295,20 @@ export function SchoolsPage() {
             key: 'trial',
             header: 'Trial ends',
             render: (s) => formatDate(s.trialEndsAt),
+          },
+          {
+            key: 'subscriptionEnds',
+            header: 'Subscription ends',
+            render: (s) =>
+              s.subscriptionEndsAt ? (
+                new Date(s.subscriptionEndsAt).getFullYear() >= 2099 ? (
+                  <span className="text-slate-500">Lifetime</span>
+                ) : (
+                  formatDate(s.subscriptionEndsAt)
+                )
+              ) : (
+                <span className="text-slate-400">—</span>
+              ),
           },
           {
             key: 'schema',

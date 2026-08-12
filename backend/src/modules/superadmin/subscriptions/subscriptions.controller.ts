@@ -24,9 +24,9 @@ export class SubscriptionsController {
   constructor(private readonly subs: SubscriptionsService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List all subscriptions' })
-  list() {
-    return this.subs.list();
+  @ApiOperation({ summary: 'List all subscriptions (optionally filtered by school)' })
+  list(@Query('schoolId') schoolId?: string) {
+    return this.subs.list(schoolId || undefined);
   }
 
   @Get(':id')

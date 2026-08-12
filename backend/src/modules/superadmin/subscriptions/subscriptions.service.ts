@@ -30,8 +30,9 @@ export class SubscriptionsService {
     this.planRepo = ds.getRepository(Plan);
   }
 
-  list() {
+  list(schoolId?: string) {
     return this.repo.find({
+      where: schoolId ? { schoolId } : {},
       relations: { school: true, plan: true },
       order: { createdAt: 'DESC' },
     });

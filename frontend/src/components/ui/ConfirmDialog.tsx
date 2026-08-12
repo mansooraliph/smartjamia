@@ -30,6 +30,7 @@ export function ConfirmDialog({
       onClose={onClose}
       title={title}
       size="sm"
+      variant="center"
       footer={
         <>
           <button

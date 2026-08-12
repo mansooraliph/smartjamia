@@ -58,7 +58,7 @@ export function SubscriptionsPage() {
 
   const { data: subs = [], isLoading } = useQuery({
     queryKey: ['subscriptions'],
-    queryFn: SubscriptionsApi.list,
+    queryFn: () => SubscriptionsApi.list(),
   });
 
   const { data: schools = [] } = useQuery({

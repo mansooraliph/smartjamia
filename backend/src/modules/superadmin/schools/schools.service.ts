@@ -6,13 +6,26 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { DataSource, ILike, Repository } from 'typeorm';
+import { DataSource, ILike, In, Repository } from 'typeorm';
 import slugify from 'slugify';
 import * as bcrypt from 'bcrypt';
 import { School } from '../../../database/master/school.entity';
 import { Plan } from '../../../database/master/plan.entity';
-import { User } from '../../../database/tenant/user.entity';
+import { User, UserRole } from '../../../database/tenant/user.entity';
+import { Student } from '../../../database/tenant/student.entity';
+import { Staff } from '../../../database/tenant/staff.entity';
+import { ClassEntity } from '../../../database/tenant/class.entity';
+import { Section } from '../../../database/tenant/section.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
+
+const STAFF_ROLES: UserRole[] = [
+  'owner',
+  'admin',
+  'manager',
+  'teacher',
+  'staff',
+  'cashier',
+];
 import { OrganizationsService } from '../organizations/organizations.service';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
@@ -285,6 +298,41 @@ export class SchoolsService {
           isActive: true,
         }),
       );
+    });
+  }
+
+  /** Quick counts for the school-detail page — students, staff, classes, sections. */
+  async getSummary(id: string) {
+    const school = await this.findOne(id);
+    return this.tenantSchema.runInSchema(school.schemaName, async (em) => {
+      const [studentsCount, staffCount, classesCount, sectionsCount] =
+        await Promise.all([
+          em.getRepository(Student).count({ where: { schoolId: school.id } }),
+          em.getRepository(Staff).count({ where: { schoolId: school.id } }),
+          em.getRepository(ClassEntity).count({ where: { schoolId: school.id } }),
+          em.getRepository(Section).count({ where: { schoolId: school.id } }),
+        ]);
+      return { studentsCount, staffCount, classesCount, sectionsCount };
+    });
+  }
+
+  /** Tenant login accounts for this school (owner/admin/manager/teacher/staff/cashier). */
+  async getUsers(id: string) {
+    const school = await this.findOne(id);
+    return this.tenantSchema.runInSchema(school.schemaName, async (em) => {
+      const users = await em.getRepository(User).find({
+        where: { schoolId: school.id, role: In(STAFF_ROLES) },
+        order: { createdAt: 'ASC' },
+      });
+      return users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.roleKey ?? u.role,
+        isActive: u.isActive,
+        lastLoginAt: u.lastLoginAt,
+        createdAt: u.createdAt,
+      }));
     });
   }
 
