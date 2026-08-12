@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -12,8 +13,15 @@ import {
   Server,
   Mail,
   Phone,
+  LayoutGrid,
+  CreditCard,
+  Pencil,
+  UserCog,
 } from 'lucide-react';
+import { cn } from '@/lib/cn';
 import {
+  CreateSchoolPayload,
+  PlansApi,
   School,
   SchoolsApi,
   Subscription,
@@ -24,6 +32,7 @@ import { DataTable } from '@/components/ui/DataTable';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
 import { useAuthStore } from '@/stores/auth.store';
 import { toast } from '@/stores/toast.store';
+import { OwnerModal, SchoolFormModal } from '@/components/superadmin/SchoolModals';
 
 const statusTone: Record<
   School['status'],
@@ -47,16 +56,41 @@ const subTone: Record<
   expired: 'red',
 };
 
+const TABS = [
+  { key: 'overview', label: 'Overview', icon: LayoutGrid },
+  { key: 'subscription', label: 'Subscription', icon: CreditCard },
+  { key: 'users', label: 'Staff logins', icon: Users },
+] as const;
+type TabKey = (typeof TABS)[number]['key'];
+
 export function SchoolDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
   const enterImpersonation = useAuthStore((s) => s.enterImpersonation);
+  const [tab, setTab] = useState<TabKey>('overview');
+  const [editOpen, setEditOpen] = useState(false);
+  const [ownerOpen, setOwnerOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
 
   const { data: school, isLoading: schoolLoading } = useQuery({
     queryKey: ['school', id],
     queryFn: () => SchoolsApi.get(id),
     enabled: !!id,
+  });
+
+  const { data: plans = [] } = useQuery({
+    queryKey: ['plans'],
+    queryFn: PlansApi.list,
+  });
+
+  const upsert = useMutation({
+    mutationFn: (payload: CreateSchoolPayload) => SchoolsApi.update(id, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['school', id] });
+      qc.invalidateQueries({ queryKey: ['schools'] });
+      setEditOpen(false);
+    },
   });
 
   const { data: summary } = useQuery({
@@ -161,104 +195,181 @@ export function SchoolDetailPage() {
             )}
           </div>
         </div>
-        <button
-          className="btn-secondary inline-flex items-center gap-1.5 disabled:opacity-50"
-          onClick={() => impersonate.mutate()}
-          disabled={impersonate.isPending}
-          title="Log in as this school's admin"
-        >
-          {impersonate.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Eye className="h-4 w-4" />
-          )}
-          Impersonate
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="btn-secondary inline-flex items-center gap-1.5"
+            onClick={() => setEditOpen(true)}
+            title="Edit school details"
+          >
+            <Pencil className="h-4 w-4" />
+            Edit
+          </button>
+          <button
+            className="btn-secondary inline-flex items-center gap-1.5"
+            onClick={() => setOwnerOpen(true)}
+            title="Manage admin / reset password"
+          >
+            <UserCog className="h-4 w-4" />
+            Reset password
+          </button>
+          <button
+            className="btn-secondary inline-flex items-center gap-1.5 disabled:opacity-50"
+            onClick={() => impersonate.mutate()}
+            disabled={impersonate.isPending}
+            title="Log in as this school's admin"
+          >
+            {impersonate.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Eye className="h-4 w-4" />
+            )}
+            Impersonate
+          </button>
+        </div>
       </div>
 
-      {/* Summary tiles */}
-      <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <StatTile icon={GraduationCap} label="Students" value={summary?.studentsCount} />
-        <StatTile icon={Users} label="Staff logins" value={summary?.staffCount} />
-        <StatTile icon={BookOpen} label="Classes" value={summary?.classesCount} />
-        <StatTile icon={Layers} label="Sections" value={summary?.sectionsCount} />
-      </div>
+      {notice && (
+        <div className="mb-4 flex items-center justify-between rounded-md bg-green-50 px-3 py-2 text-sm text-green-800">
+          <span>{notice}</span>
+          <button onClick={() => setNotice(null)} className="text-green-600 hover:text-green-800">
+            ✕
+          </button>
+        </div>
+      )}
 
-      {/* Subscription */}
-      <div className="mb-6">
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Subscription
-        </h2>
-        {currentSub && (
-          <div className="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
-            <div>
-              <div className="text-xs text-slate-400">Plan</div>
-              <div className="font-medium text-slate-900">
-                {currentSub.plan?.name ?? '—'}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-400">Status</div>
-              <Badge tone={subTone[currentSub.status] ?? 'slate'}>
-                {currentSub.status}
-              </Badge>
-            </div>
-            <div>
-              <div className="text-xs text-slate-400">Billing</div>
-              <div className="font-medium text-slate-900">
-                {formatMoney(currentSub.amount, currentSub.currency)} /{' '}
-                {currentSub.billingCycle}
-              </div>
-            </div>
-            <div>
-              <div className="text-xs text-slate-400">Current period</div>
-              <div className="font-medium text-slate-900">
-                {formatDate(currentSub.currentPeriodStart)} –{' '}
-                {formatDate(currentSub.currentPeriodEnd)}
-              </div>
-            </div>
-          </div>
-        )}
-        <DataTable<Subscription>
-          rows={subscriptions}
-          getRowId={(r) => r.id}
-          isLoading={subsLoading}
-          emptyMessage="No subscriptions on record for this school."
-          columns={[
-            { key: 'plan', header: 'Plan', render: (s) => s.plan?.name ?? '—' },
-            {
-              key: 'status',
-              header: 'Status',
-              render: (s) => (
-                <Badge tone={subTone[s.status] ?? 'slate'}>{s.status}</Badge>
-              ),
-            },
-            { key: 'cycle', header: 'Cycle', render: (s) => s.billingCycle },
-            {
-              key: 'amount',
-              header: 'Amount',
-              render: (s) => formatMoney(s.amount, s.currency),
-            },
-            {
-              key: 'period',
-              header: 'Period',
-              render: (s) =>
-                `${formatDate(s.currentPeriodStart)} – ${formatDate(s.currentPeriodEnd)}`,
-            },
-            {
-              key: 'gateway',
-              header: 'Gateway',
-              render: (s) => s.paymentGateway ?? '—',
-            },
-          ]}
+      <SchoolFormModal
+        open={editOpen}
+        school={school}
+        plans={plans.map((p) => ({ id: p.id, name: p.name }))}
+        onClose={() => setEditOpen(false)}
+        saving={upsert.isPending}
+        errorMsg={errMsg(upsert.error)}
+        onSubmit={(v) =>
+          upsert.mutate({
+            name: v.name,
+            code: v.code ? v.code.toUpperCase() : undefined,
+            slug: v.slug || undefined,
+            email: v.email,
+            phone: v.phone || undefined,
+            planId: v.planId || undefined,
+            status: v.status,
+          })
+        }
+      />
+
+      {ownerOpen && (
+        <OwnerModal
+          school={school}
+          onClose={() => setOwnerOpen(false)}
+          onSaved={(msg) => {
+            setOwnerOpen(false);
+            setNotice(msg);
+          }}
         />
+      )}
+
+      {/* Tabs */}
+      <div className="mb-6 border-b border-slate-200">
+        <nav className="-mb-px flex gap-1">
+          {TABS.map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 border-b-2 px-3 pb-2.5 text-sm font-medium',
+                  active
+                    ? 'border-brand-500 text-brand-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <Icon className="h-4 w-4" /> {t.label}
+              </button>
+            );
+          })}
+        </nav>
       </div>
 
-      {/* Users */}
-      <div>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Staff logins
-        </h2>
+      {tab === 'overview' && (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <StatTile icon={GraduationCap} label="Students" value={summary?.studentsCount} />
+          <StatTile icon={Users} label="Staff logins" value={summary?.staffCount} />
+          <StatTile icon={BookOpen} label="Classes" value={summary?.classesCount} />
+          <StatTile icon={Layers} label="Sections" value={summary?.sectionsCount} />
+        </div>
+      )}
+
+      {tab === 'subscription' && (
+        <div>
+          {currentSub && (
+            <div className="mb-4 grid grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-white p-4 sm:grid-cols-4">
+              <div>
+                <div className="text-xs text-slate-400">Plan</div>
+                <div className="font-medium text-slate-900">
+                  {currentSub.plan?.name ?? '—'}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">Status</div>
+                <Badge tone={subTone[currentSub.status] ?? 'slate'}>
+                  {currentSub.status}
+                </Badge>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">Billing</div>
+                <div className="font-medium text-slate-900">
+                  {formatMoney(currentSub.amount, currentSub.currency)} /{' '}
+                  {currentSub.billingCycle}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-slate-400">Current period</div>
+                <div className="font-medium text-slate-900">
+                  {formatDate(currentSub.currentPeriodStart)} –{' '}
+                  {formatDate(currentSub.currentPeriodEnd)}
+                </div>
+              </div>
+            </div>
+          )}
+          <DataTable<Subscription>
+            rows={subscriptions}
+            getRowId={(r) => r.id}
+            isLoading={subsLoading}
+            emptyMessage="No subscriptions on record for this school."
+            columns={[
+              { key: 'plan', header: 'Plan', render: (s) => s.plan?.name ?? '—' },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (s) => (
+                  <Badge tone={subTone[s.status] ?? 'slate'}>{s.status}</Badge>
+                ),
+              },
+              { key: 'cycle', header: 'Cycle', render: (s) => s.billingCycle },
+              {
+                key: 'amount',
+                header: 'Amount',
+                render: (s) => formatMoney(s.amount, s.currency),
+              },
+              {
+                key: 'period',
+                header: 'Period',
+                render: (s) =>
+                  `${formatDate(s.currentPeriodStart)} – ${formatDate(s.currentPeriodEnd)}`,
+              },
+              {
+                key: 'gateway',
+                header: 'Gateway',
+                render: (s) => s.paymentGateway ?? '—',
+              },
+            ]}
+          />
+        </div>
+      )}
+
+      {tab === 'users' && (
         <DataTable
           rows={users}
           getRowId={(r) => r.id}
@@ -292,7 +403,7 @@ export function SchoolDetailPage() {
             },
           ]}
         />
-      </div>
+      )}
     </>
   );
 }
