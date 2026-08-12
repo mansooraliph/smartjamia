@@ -36,6 +36,21 @@ export class ListTransactionsQueryDto extends PaginationDto {
   @Transform(({ value }) => (value === undefined ? undefined : Number(value)))
   @IsInt()
   punchState?: number;
+
+  @ApiPropertyOptional({ description: 'Device serial number' })
+  @IsOptional()
+  @IsString()
+  deviceSn?: string;
+
+  @ApiPropertyOptional({ enum: ['student', 'teacher', 'staff', 'visitor'] })
+  @IsOptional()
+  @IsIn(['student', 'teacher', 'staff', 'visitor'])
+  userType?: string;
+
+  @ApiPropertyOptional({ description: 'Restrict to students in this class' })
+  @IsOptional()
+  @IsUUID()
+  classId?: string;
 }
 
 export class ListEnrollmentsQueryDto extends PaginationDto {

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Lock, Radio, UserPlus, Settings } from 'lucide-react';
+import { Lock, Radio, UserPlus, Settings, FileClock } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Modal } from '@/components/ui/Modal';
 import { Field, Input } from '@/components/ui/Input';
@@ -32,6 +33,7 @@ type PunchState = { deviceIds: string[]; names: string[] } | null;
 
 export function BiometricDevicesPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
   const {
     selectedIds,
     toggleSelect,
@@ -252,6 +254,14 @@ export function BiometricDevicesPage() {
         description="Manage and monitor your biometric terminals."
         actions={
           <>
+            <button
+              className="btn-secondary"
+              onClick={() => navigate('/biometric-devices/transactions')}
+              title="Transaction report"
+            >
+              <FileClock className="h-4 w-4 sm:mr-1.5" />
+              <span className="hidden sm:inline">Transactions</span>
+            </button>
             <button
               className="btn-secondary"
               onClick={() => setSettingsOpen(true)}

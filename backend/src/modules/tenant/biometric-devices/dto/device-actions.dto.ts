@@ -86,10 +86,12 @@ export interface BulkActionResult {
   message: string;
 }
 
-/** Update the per-school device PIN prefixes. Validated in the service. */
+/** Update the per-school device PIN prefixes. Validated in the service. A
+ *  prefix value of null (or omission) clears/keeps that type's prefix — see
+ *  sanitizePrefixes in user-code.util. */
 export class UpdateDeviceSettingsDto {
   @IsObject()
-  prefixes: Record<string, string>;
+  prefixes: Record<string, string | null>;
 }
 
 export type EnrollUserType = 'student' | 'teacher' | 'staff' | 'visitor';
@@ -101,6 +103,11 @@ export class ListEnrollUsersQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  /** Restrict results to students currently enrolled in this class. */
+  @IsOptional()
+  @IsUUID()
+  classId?: string;
 }
 
 /**

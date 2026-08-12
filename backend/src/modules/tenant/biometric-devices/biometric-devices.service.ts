@@ -11,6 +11,7 @@ import { BiometricDeviceCommand } from '../../../database/master/biometric-devic
 import { BiometricTransaction } from '../../../database/tenant/biometric-transaction.entity';
 import { BiometricEnrollment } from '../../../database/tenant/biometric-enrollment.entity';
 import { Student } from '../../../database/tenant/student.entity';
+import { StudentEnrollment } from '../../../database/tenant/student-enrollment.entity';
 import { Staff } from '../../../database/tenant/staff.entity';
 import { User } from '../../../database/tenant/user.entity';
 import { Visitor } from '../../../database/tenant/visitor.entity';
@@ -51,6 +52,9 @@ export interface EnrollableUser {
   userCode: string;
   name: string;
   subtitle?: string;
+  /** 'enrolled' once a template was received; 'pending' if queued but not yet
+   *  captured; 'none' if never enrolled on any device. */
+  enrollmentStatus: 'enrolled' | 'pending' | 'none';
 }
 
 const BIO_TYPE_LABEL: Record<BiometricType, string> = {
@@ -459,12 +463,39 @@ export class BiometricDevicesService {
     return (role ?? '').toLowerCase() === 'teacher' ? 'teacher' : 'staff';
   }
 
+  /**
+   * Look up each id's biometric enrollment status on the given FK column
+   * ('enrolled' beats 'pending' when a user has rows in both states, e.g. one
+   * finger captured and a second still queued).
+   */
+  private async enrollmentStatusMap(
+    em: import('typeorm').EntityManager,
+    schoolId: string,
+    fk: 'studentId' | 'staffId' | 'visitorId',
+    ids: string[],
+  ): Promise<Map<string, 'enrolled' | 'pending'>> {
+    const map = new Map<string, 'enrolled' | 'pending'>();
+    if (!ids.length) return map;
+    const rows = await em.getRepository(BiometricEnrollment).find({
+      where: { schoolId, [fk]: In(ids) } as any,
+      select: { [fk]: true, status: true } as any,
+    });
+    for (const r of rows) {
+      const id = (r as any)[fk] as string | null;
+      if (!id) continue;
+      if (r.status === 'enrolled') map.set(id, 'enrolled');
+      else if (!map.has(id)) map.set(id, 'pending');
+    }
+    return map;
+  }
+
   /** Search enrollable users of a given type, each resolved to its device PIN. */
   async listEnrollableUsers(
     schoolId: string,
     schemaName: string,
     type: EnrollUserType,
     search?: string,
+    classId?: string,
   ): Promise<EnrollableUser[]> {
     const term = (search ?? '').trim();
     const like = `%${term}%`;
@@ -483,7 +514,20 @@ export class BiometricDevicesService {
             '(s.student_name ILIKE :like OR s.admission_number ILIKE :like)',
             { like },
           );
+        if (classId) {
+          qb.innerJoin(
+            StudentEnrollment,
+            'e',
+            "e.student_id = s.id AND e.school_id = s.school_id AND e.status = 'active'",
+          ).andWhere('e.class_id = :classId', { classId });
+        }
         const rows = await qb.getMany();
+        const statusById = await this.enrollmentStatusMap(
+          em,
+          schoolId,
+          'studentId',
+          rows.map((s) => s.id),
+        );
         return rows.map((s) => ({
           id: s.id,
           userType: 'student' as const,
@@ -491,6 +535,7 @@ export class BiometricDevicesService {
           userCode: buildUserCode('student', s.admissionNumber, prefixes),
           name: s.studentName,
           subtitle: s.admissionNumber,
+          enrollmentStatus: statusById.get(s.id) ?? 'none',
         }));
       }
 
@@ -519,6 +564,12 @@ export class BiometricDevicesService {
           employee_id: string;
           name: string | null;
         }>();
+        const statusById = await this.enrollmentStatusMap(
+          em,
+          schoolId,
+          'staffId',
+          rows.map((r) => r.id),
+        );
         return rows.map((r) => ({
           id: r.id,
           userType: type,
@@ -526,6 +577,7 @@ export class BiometricDevicesService {
           userCode: buildUserCode(type, r.employee_id, prefixes),
           name: r.name ?? r.employee_id,
           subtitle: r.employee_id,
+          enrollmentStatus: statusById.get(r.id) ?? 'none',
         }));
       }
 
@@ -540,6 +592,12 @@ export class BiometricDevicesService {
       if (term)
         qb.andWhere('(v.name ILIKE :like OR v.mobile ILIKE :like)', { like });
       const rows = await qb.getMany();
+      const statusById = await this.enrollmentStatusMap(
+        em,
+        schoolId,
+        'visitorId',
+        rows.map((v) => v.id),
+      );
       return rows.map((v) => {
         const base = visitorBase(v.id);
         return {
@@ -549,6 +607,7 @@ export class BiometricDevicesService {
           userCode: buildUserCode('visitor', base, prefixes),
           name: v.name,
           subtitle: v.mobile,
+          enrollmentStatus: statusById.get(v.id) ?? 'none',
         };
       });
     });
@@ -560,7 +619,7 @@ export class BiometricDevicesService {
     schemaName: string,
     type: EnrollUserType,
     id: string,
-  ): Promise<EnrollableUser | null> {
+  ): Promise<Omit<EnrollableUser, 'enrollmentStatus'> | null> {
     return this.tenant.runInSchema(schemaName, async (em) => {
       const prefixes = await loadBiometricPrefixes(em, schoolId);
       if (type === 'student') {
@@ -846,6 +905,74 @@ export class BiometricDevicesService {
 
   // ── Transactions / enrollments (tenant schema) ──────────────────────────────
 
+  /** Resolve punch rows to display names + device alias, for the report table. */
+  private async attachTransactionDisplay(
+    em: import('typeorm').EntityManager,
+    schoolId: string,
+    rows: BiometricTransaction[],
+  ) {
+    const studentIds = [
+      ...new Set(rows.map((r) => r.studentId).filter(Boolean) as string[]),
+    ];
+    const staffIds = [
+      ...new Set(rows.map((r) => r.staffId).filter(Boolean) as string[]),
+    ];
+    const visitorIds = [
+      ...new Set(rows.map((r) => r.visitorId).filter(Boolean) as string[]),
+    ];
+    const sns = [...new Set(rows.map((r) => r.deviceSn))];
+
+    const [students, staffRows, visitors, devices] = await Promise.all([
+      studentIds.length
+        ? em.getRepository(Student).find({
+            where: { id: In(studentIds), schoolId },
+            select: { id: true, studentName: true },
+          })
+        : [],
+      staffIds.length
+        ? em
+            .getRepository(Staff)
+            .createQueryBuilder('st')
+            .leftJoin(User, 'u', 'u.id = st.user_id')
+            .select(['st.id AS id', 'u.name AS name'])
+            .where('st.id IN (:...ids)', { ids: staffIds })
+            .andWhere('st.school_id = :schoolId', { schoolId })
+            .getRawMany<{ id: string; name: string | null }>()
+        : [],
+      visitorIds.length
+        ? em.getRepository(Visitor).find({
+            where: { id: In(visitorIds), schoolId },
+            select: { id: true, name: true },
+          })
+        : [],
+      sns.length
+        ? this.deviceRepo.find({ where: { sn: In(sns), schoolId } })
+        : [],
+    ]);
+    const studentName = new Map<string, string | null>(
+      students.map((s): [string, string | null] => [s.id, s.studentName]),
+    );
+    const staffName = new Map<string, string | null>(
+      staffRows.map((s): [string, string | null] => [s.id, s.name]),
+    );
+    const visitorName = new Map<string, string | null>(
+      visitors.map((v): [string, string | null] => [v.id, v.name]),
+    );
+    const deviceAlias = new Map<string, string>(
+      devices.map((d): [string, string] => [d.sn, d.alias || d.sn]),
+    );
+
+    return rows.map((r) => ({
+      ...r,
+      userName:
+        (r.studentId && studentName.get(r.studentId)) ||
+        (r.staffId && staffName.get(r.staffId)) ||
+        (r.visitorId && visitorName.get(r.visitorId)) ||
+        null,
+      deviceAlias: deviceAlias.get(r.deviceSn) ?? r.deviceSn,
+    }));
+  }
+
   transactions(
     schoolId: string,
     schemaName: string,
@@ -865,11 +992,21 @@ export class BiometricDevicesService {
       if (q.staffId) qb.andWhere('t.staff_id = :stid', { stid: q.staffId });
       if (q.punchState !== undefined)
         qb.andWhere('t.punch_state = :ps', { ps: q.punchState });
+      if (q.deviceSn) qb.andWhere('t.device_sn = :sn', { sn: q.deviceSn });
+      if (q.userType) qb.andWhere('t.user_type = :ut', { ut: q.userType });
+      if (q.classId) {
+        qb.innerJoin(
+          StudentEnrollment,
+          'e',
+          "e.student_id = t.student_id AND e.school_id = t.school_id AND e.status = 'active'",
+        ).andWhere('e.class_id = :classId', { classId: q.classId });
+      }
       const [items, total] = await qb
         .skip((page - 1) * limit)
         .take(limit)
         .getManyAndCount();
-      return paginate(items, total, page, limit);
+      const display = await this.attachTransactionDisplay(em, schoolId, items);
+      return paginate(display, total, page, limit);
     });
   }
 

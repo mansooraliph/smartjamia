@@ -81,6 +81,7 @@ export class BiometricDevicesController {
       t.schemaName,
       q.type,
       q.search,
+      q.classId,
     );
   }
 

@@ -1,4 +1,5 @@
 import api from '@/lib/axios';
+import type { EnrollUserType } from '@/constants/biometric';
 
 // ───── Types ────────────────────────────────────────────────────────────────
 export interface AcademicYear {
@@ -1467,9 +1468,15 @@ export interface BiometricDevice {
 export interface BiometricTransaction {
   id: string;
   deviceSn: string;
+  /** Device display name (alias, falls back to serial). */
+  deviceAlias: string;
   userCode: string;
   studentId: string | null;
   staffId: string | null;
+  visitorId: string | null;
+  userType: string | null;
+  /** Resolved student/staff/visitor name, or null if unresolved. */
+  userName: string | null;
   actualPunchTime: string;
   punchTime: string;
   punchState: number;
@@ -1515,6 +1522,9 @@ export interface BiometricTxParams {
   studentId?: string;
   staffId?: string;
   punchState?: number;
+  deviceSn?: string;
+  userType?: EnrollUserType;
+  classId?: string;
 }
 
 export const BiometricApi = {

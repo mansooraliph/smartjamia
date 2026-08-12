@@ -63,6 +63,7 @@ export interface EnrollableUser {
   userCode: string; // full device PIN (prefix + base)
   name: string;
   subtitle?: string;
+  enrollmentStatus: 'enrolled' | 'pending' | 'none';
 }
 
 export interface EnrollUserPayload {
@@ -80,11 +81,12 @@ export interface DeviceStats {
   unsynced: number;
 }
 
+/** A null prefix means that user type's device PIN has no prefix (raw id). */
 export interface DevicePrefixes {
-  student: string;
-  teacher: string;
-  staff: string;
-  visitor: string;
+  student: string | null;
+  teacher: string | null;
+  staff: string | null;
+  visitor: string | null;
 }
 
 export interface UserSearchResult {
@@ -179,8 +181,13 @@ export const BiometricDevicesApi = {
   listEnrollableUsers: async (
     type: EnrollUserType,
     search?: string,
+    classId?: string,
   ): Promise<EnrollableUser[]> =>
-    unwrap(await api.get(`${BASE}/enroll/users`, { params: { type, search } })),
+    unwrap(
+      await api.get(`${BASE}/enroll/users`, {
+        params: { type, search, classId },
+      }),
+    ),
   enrollUser: async (payload: EnrollUserPayload): Promise<BulkActionResult> =>
     unwrap(await api.post(`${BASE}/enrollments`, payload)),
 

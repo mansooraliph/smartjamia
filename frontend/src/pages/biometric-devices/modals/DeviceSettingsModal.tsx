@@ -22,19 +22,21 @@ const DEFAULTS: DevicePrefixes = {
   visitor: 'V',
 };
 
-/** Client-side mirror of the backend validation (1-8 alphanumerics, no prefix a
- *  leading substring of another). */
+/** Client-side mirror of the backend validation. A prefix is nullable — an
+ *  empty field means no prefix (raw id) for that user type; when set, it
+ *  must be 1-8 alphanumerics, and no prefix may be a leading substring of
+ *  another. */
 function validate(p: DevicePrefixes): string | null {
   const types = Object.keys(p) as (keyof DevicePrefixes)[];
   for (const t of types) {
     const v = p[t];
-    if (!v) return `Prefix for ${t} is required`;
+    if (!v) continue;
     if (!/^[A-Za-z0-9]{1,8}$/.test(v))
       return `Prefix "${v}" (${t}) must be 1-8 letters or digits`;
   }
   for (const a of types)
     for (const b of types)
-      if (a !== b && p[b].startsWith(p[a]))
+      if (a !== b && p[a] && p[b] && p[b]!.startsWith(p[a]!))
         return `"${p[a]}" (${a}) conflicts with "${p[b]}" (${b}) — one can't start the other`;
   return null;
 }
@@ -92,16 +94,17 @@ export function DeviceSettingsModal({ onClose, onSaved }: Props) {
         {ENROLL_USER_TYPES.map((u) => (
           <Field key={u.value} label={`${u.icon} ${u.label} prefix`}>
             <Input
-              value={prefixes[u.value]}
+              value={prefixes[u.value] ?? ''}
               maxLength={8}
               onChange={(e) =>
                 set(u.value, e.target.value.replace(/[^A-Za-z0-9]/g, ''))
               }
-              placeholder={DEFAULTS[u.value]}
+              placeholder="No prefix"
             />
             <p className="mt-1 text-xs text-slate-400">
-              e.g. {prefixes[u.value] || DEFAULTS[u.value]}
-              {u.value === 'visitor' ? '<visitor-id>' : '<id>'}
+              {prefixes[u.value]
+                ? `e.g. ${prefixes[u.value]}${u.value === 'visitor' ? '<visitor-id>' : '<id>'}`
+                : `No prefix — raw ${u.value === 'visitor' ? 'visitor id' : 'id'} used as-is`}
             </p>
           </Field>
         ))}

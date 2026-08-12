@@ -12,12 +12,15 @@ import { SchoolProfile } from '../../database/tenant/school-profile.entity';
  *   Staff    → `E` + employee_id      (non-teaching)
  *   Visitor  → `V` + short visitor id
  *
- * Codes that match no configured prefix are resolved by raw match for
- * backward compatibility (see IclockService.resolveUsers).
+ * A prefix is nullable — a school can clear it for a given user type so that
+ * type's device PIN is just the raw base id with no prefix. A cleared prefix
+ * can't be used to decode a punch back to its type (see parseUserCode), so
+ * those codes fall back to raw match for backward compatibility (see
+ * IclockService.resolveUsers).
  */
 export type EnrollUserType = 'student' | 'teacher' | 'staff' | 'visitor';
 
-export type PrefixConfig = Record<EnrollUserType, string>;
+export type PrefixConfig = Record<EnrollUserType, string | null>;
 
 export const ENROLL_USER_TYPES: EnrollUserType[] = [
   'student',
@@ -39,7 +42,7 @@ export function buildUserCode(
   base: string,
   prefixes: PrefixConfig = DEFAULT_PREFIXES,
 ): string {
-  return `${prefixes[type]}${base}`;
+  return `${prefixes[type] ?? ''}${base}`;
 }
 
 /** Short, stable identifier for a visitor (first 8 hex chars of the UUID). */
@@ -69,34 +72,43 @@ export function parseUserCode(
   return { type: best.type, base: code.slice(best.prefix.length) };
 }
 
-/** Normalize a (partial) prefix config, filling gaps with the defaults. */
+/**
+ * Normalize a (partial) prefix config, filling gaps with the defaults. A key
+ * that's absent from `input` keeps its default; a key explicitly set to
+ * `null`/`''` is persisted as `null` (no prefix for that type).
+ */
 export function sanitizePrefixes(input: unknown): PrefixConfig {
-  const raw = (input ?? {}) as Partial<Record<EnrollUserType, string>>;
+  const raw = (input ?? {}) as Partial<Record<EnrollUserType, string | null>>;
   const out: PrefixConfig = { ...DEFAULT_PREFIXES };
   for (const t of ENROLL_USER_TYPES) {
-    const v = typeof raw[t] === 'string' ? (raw[t] as string).trim() : '';
-    if (v) out[t] = v;
+    if (!(t in raw)) continue;
+    const v = raw[t];
+    const trimmed = typeof v === 'string' ? v.trim() : '';
+    out[t] = trimmed || null;
   }
   return out;
 }
 
 /**
  * Validate a prefix config for use. Returns an error message, or null if valid.
- * Each prefix must be 1-8 alphanumerics, and no prefix may be a leading
- * substring of another (which would make PIN parsing ambiguous).
+ * A prefix may be null (no prefix for that user type); when set, it must be
+ * 1-8 alphanumerics, and no prefix may be a leading substring of another
+ * (which would make PIN parsing ambiguous).
  */
 export function validatePrefixes(prefixes: PrefixConfig): string | null {
   for (const t of ENROLL_USER_TYPES) {
     const p = prefixes[t];
-    if (!p) return `Prefix for ${t} is required`;
+    if (p == null) continue;
     if (!/^[A-Za-z0-9]{1,8}$/.test(p)) {
       return `Prefix "${p}" (${t}) must be 1-8 letters or digits`;
     }
   }
   for (const a of ENROLL_USER_TYPES) {
     for (const b of ENROLL_USER_TYPES) {
-      if (a !== b && prefixes[b].startsWith(prefixes[a])) {
-        return `Prefix "${prefixes[a]}" (${a}) conflicts with "${prefixes[b]}" (${b}) — one can't start the other`;
+      const pa = prefixes[a];
+      const pb = prefixes[b];
+      if (a !== b && pa && pb && pb.startsWith(pa)) {
+        return `Prefix "${pa}" (${a}) conflicts with "${pb}" (${b}) — one can't start the other`;
       }
     }
   }
