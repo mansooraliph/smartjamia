@@ -277,6 +277,37 @@ export function ClassesPage() {
     </div>
   );
 
+  // Bare class card — no nested sections — used for school-mode tab 1,
+  // which lists classes only (sections live entirely on tab 2 there).
+  const renderClassCardBare = (cls: ClassEntity) => (
+    <div key={cls.id} className="card overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-slate-900">{cls.name}</h3>
+          <Badge tone="slate">
+            {cls.sections?.length ?? 0} {term.groupPlural.toLowerCase()}
+          </Badge>
+        </div>
+        <div className="flex items-center gap-1">
+          <button
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-700"
+            onClick={() => setClassModal({ open: true, cls })}
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
+            onClick={() => setClassConfirm({ open: true, cls })}
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   // Flat list of every section across all classes, for the school-mode Sections tab.
   const allSections = useMemo(
     () =>
@@ -515,6 +546,20 @@ export function ClassesPage() {
     </>
   );
 
+  // Bare classes grid — school mode tab 1 (no sections nested; those live
+  // entirely on tab 2 for schools).
+  const classesGridContentBare = isLoading ? (
+    <div className="card p-8 text-center text-slate-400">Loading…</div>
+  ) : classes.length === 0 ? (
+    <div className="card p-8 text-center text-slate-400">
+      No {term.levelPlural.toLowerCase()} yet for this academic year.
+    </div>
+  ) : (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {classes.map(renderClassCardBare)}
+    </div>
+  );
+
   if (years.length === 0) {
     return (
       <>
@@ -640,7 +685,7 @@ export function ClassesPage() {
         </nav>
       </div>
 
-      {tab === 'first' && !isCollege && classesGridContent}
+      {tab === 'first' && !isCollege && classesGridContentBare}
       {tab === 'first' && isCollege && coursesBoxContent}
       {tab === 'second' && isCollege && classesGridContent}
       {tab === 'second' && !isCollege && sectionsTableContent}
