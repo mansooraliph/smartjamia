@@ -86,7 +86,7 @@ export class IclockService {
       'Stamp=9999',
       `OpStamp=${stamp}`,
       'ErrorDelay=30',
-      'Delay=30',
+      'Delay=10',
       'TransTimes=00:00;23:59',
       'TransInterval=2',
       'TransFlag=111111111111',
@@ -110,7 +110,7 @@ export class IclockService {
       'Stamp=9999',
       `OpStamp=${stamp}`,
       'ErrorDelay=30',
-      'Delay=30',
+      'Delay=10',
       'TransTimes=00:00;23:59',
       'TransInterval=2',
       'TransFlag=111111111111',
@@ -151,6 +151,12 @@ export class IclockService {
   async handleDeviceCommands(rawBody: string, sn?: string): Promise<string> {
     // Persist the raw ack so the exact device format is always inspectable.
     this.logTraffic(sn ?? '', '/iclock/devicecmd', 'POST', 'devicecmd', rawBody);
+    // A command ACK is also proof of life — see handleReceiveRecords.
+    if (sn) {
+      this.deviceRepo
+        .update({ sn }, { lastActivity: new Date().toISOString(), state: '1' })
+        .catch(() => undefined);
+    }
     try {
       const successSeqs: number[] = [];
       const errorsByCode = new Map<number, number[]>();
@@ -242,6 +248,13 @@ export class IclockService {
     rawBody: string,
   ): Promise<string> {
     this.logTraffic(sn, '/iclock/cdata', 'POST', table, rawBody);
+    // Pushing data (ATTLOG/OPERLOG/BIODATA/...) is just as much proof the
+    // device is alive as getrequest — count it toward the online heartbeat
+    // too, so a device mid-enrollment (pausing getrequest for its on-screen
+    // capture UI while still pushing OPERLOG) doesn't flash "offline".
+    this.deviceRepo
+      .update({ sn }, { lastActivity: new Date().toISOString(), state: '1' })
+      .catch(() => undefined);
     const device = await this.deviceRepo.findOne({ where: { sn } });
     if (!device) return 'ERROR';
 
@@ -347,7 +360,12 @@ export class IclockService {
     if (!schemaName) return;
     const schoolId = device.schoolId;
 
-    // BIODATA lines look like: "BIODATA Pin=1\tNo=0\tIndex=0\tValid=1\t...Tmp=...."
+    // Lines come in two shapes: dedicated "BIODATA Pin=1\tNo=0\tIndex=0\t...Tmp=..."
+    // pushes, and the more common "FP PIN=1 FID=5 Size=.. Valid=1 TMP=.." lines
+    // ZK/ESSL firmware embeds directly in OPERLOG. The latter has only a SINGLE
+    // space between the leading type keyword and "PIN=" — parseKv only splits on
+    // tab/2+-space runs, so without stripping that keyword first, "FP PIN" gets
+    // swallowed into one bogus key and the whole record silently drops.
     const records = rawBody
       .split('\n')
       .map((l) => l.replace(/\r$/, '').trim())
@@ -356,11 +374,18 @@ export class IclockService {
     await this.tenant.runInSchema(schemaName, async (em) => {
       const prefixes = await loadBiometricPrefixes(em, schoolId);
       for (const line of records) {
-        const kv = this.parseKv(line.replace(/^BIODATA\s+/i, ''));
+        const kindMatch = /^(BIODATA|FP|FACE|PALM)\s+/i.exec(line);
+        const kindHint = kindMatch?.[1]?.toUpperCase();
+        const kv = this.parseKv(kindMatch ? line.slice(kindMatch[0].length) : line);
         const userCode = kv['Pin'] || kv['PIN'];
         if (!userCode) continue;
-        const typeCode = this.bioTypeLabel(kv['Type'] ?? kv['type']);
-        const index = kv['Index'] ?? kv['No'] ?? '0';
+        // Dedicated BIODATA pushes carry an explicit Type code; FP/FACE/PALM
+        // lines imply their type from the keyword itself instead.
+        const typeCode =
+          kindHint && kindHint !== 'BIODATA'
+            ? kindHint
+            : this.bioTypeLabel(kv['Type'] ?? kv['type']);
+        const index = kv['FID'] ?? kv['Index'] ?? kv['No'] ?? '0';
         const [ru] = [
           (await this.resolveUsers(em, schoolId, [userCode], prefixes)).get(
             userCode,

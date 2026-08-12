@@ -375,12 +375,14 @@ export class BiometricDevicesService {
   }
 
   /**
-   * Build the device add/update-user command. ZKTeco/ESSL expects the Card and
-   * Passwd fields present (even if empty) — omitting them makes some firmware
-   * reject the record, so the user is never created.
+   * Build the device add/update-user command. The ADMS datasheet documents
+   * `USER ADD`/`USER DEL`, but real push-protocol firmware rejects those with
+   * -1002 (invalid syntax) — `DATA UPDATE USERINFO` is what's actually
+   * accepted. Card/Passwd/Grp must be present (even if empty) or some
+   * firmware silently drops the record.
    */
   private buildAddUserCommand(userCode: string, name: string): string {
-    return `DATA USER PIN=${userCode}\tName=${name}\tPri=0\tCard=\tPasswd=`;
+    return `DATA UPDATE USERINFO PIN=${userCode}\tName=${name}\tPri=0\tPasswd=\tCard=\tGrp=1`;
   }
 
   private buildEnrollCommand(
