@@ -18,7 +18,7 @@ export const SUB_STATUSES = [
 ] as const;
 export type SubStatus = (typeof SUB_STATUSES)[number];
 
-export const BILLING_CYCLES = ['monthly', 'yearly'] as const;
+export const BILLING_CYCLES = ['monthly', 'yearly', 'lifetime'] as const;
 export type BillingCycle = (typeof BILLING_CYCLES)[number];
 
 export const PAYMENT_GATEWAYS = ['razorpay', 'stripe', 'manual'] as const;

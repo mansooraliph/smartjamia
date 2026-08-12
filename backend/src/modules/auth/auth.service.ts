@@ -138,6 +138,41 @@ export class AuthService {
     return this.buildTenantSession(tenant, user);
   }
 
+  // ─── Superadmin impersonation ─────────────────────────────────────────────
+  /**
+   * Issue a tenant session for a school's admin (owner) without a password —
+   * used by superadmins for support/testing. The resulting access token is
+   * tagged with `impersonatedBy` so it's distinguishable in logs/audits.
+   */
+  async impersonateSchool(schoolId: string, superadminId: string) {
+    const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
+    if (!school) throw new NotFoundException('School not found');
+    const tenant = this.toTenant(school);
+    this.assertSchoolUsable(tenant);
+
+    const owner = await this.tenantSchema.runInSchema(
+      tenant.schemaName,
+      (em) =>
+        em.getRepository(User).findOne({
+          where: { schoolId: tenant.schoolId, role: 'owner' },
+          order: { createdAt: 'ASC' },
+        }),
+    );
+    if (!owner) {
+      throw new NotFoundException(
+        'This school has no admin (owner) account to impersonate',
+      );
+    }
+    if (!owner.isActive) {
+      throw new ForbiddenException('School admin account is disabled');
+    }
+
+    const session = await this.buildTenantSession(tenant, owner, {
+      impersonatedBy: superadminId,
+    });
+    return { ...session, impersonating: true };
+  }
+
   /**
    * Build a full tenant session (token + user + permissions) for a resolved
    * user in a school. Shared by the standard school login and the multi-school
@@ -146,6 +181,7 @@ export class AuthService {
   private async buildTenantSession(
     tenant: TenantLike,
     user: Pick<User, 'id' | 'name' | 'email' | 'role' | 'roleKey'>,
+    opts?: { impersonatedBy?: string },
   ) {
     // Effective role + permissions (built-in constants OR a custom role).
     const effectiveRole = user.roleKey || user.role;
@@ -173,6 +209,7 @@ export class AuthService {
       scope: 'tenant' as const,
       schoolId: tenant.schoolId,
       schoolSlug: tenant.slug,
+      ...(opts?.impersonatedBy ? { impersonatedBy: opts.impersonatedBy } : {}),
     };
 
     return {

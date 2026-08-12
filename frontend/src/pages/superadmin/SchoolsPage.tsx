@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -14,6 +15,7 @@ import {
   RefreshCw,
   UserCog,
   Loader2,
+  Eye,
 } from 'lucide-react';
 import {
   CreateSchoolPayload,
@@ -29,6 +31,8 @@ import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select } from '@/components/ui/Input';
 import { formatDate } from '@/lib/format';
+import { useAuthStore } from '@/stores/auth.store';
+import { toast } from '@/stores/toast.store';
 
 const STATUSES = [
   'trial',
@@ -99,6 +103,8 @@ const statusTone: Record<
 
 export function SchoolsPage() {
   const qc = useQueryClient();
+  const navigate = useNavigate();
+  const enterImpersonation = useAuthStore((s) => s.enterImpersonation);
   const [modal, setModal] = useState<{ open: boolean; school?: School }>({
     open: false,
   });
@@ -160,6 +166,30 @@ export function SchoolsPage() {
         `Expiry sweep: checked ${r.checked} · →grace ${r.toGrace} · →suspended ${r.toSuspended} · restored ${r.restored}.`,
       );
     },
+  });
+
+  const impersonate = useMutation({
+    mutationFn: (id: string) => SchoolsApi.impersonate(id),
+    onSuccess: (session) => {
+      enterImpersonation({
+        user: {
+          id: session.user.id,
+          name: session.user.name,
+          email: session.user.email,
+          role: session.user.role,
+          schoolId: session.user.schoolId,
+          schoolSlug: session.user.schoolSlug,
+          scope: 'tenant',
+        },
+        accessToken: session.tokens.accessToken,
+        refreshToken: session.tokens.refreshToken,
+        schoolSlug: session.school.slug,
+      });
+      qc.clear();
+      navigate('/dashboard');
+    },
+    onError: (e) =>
+      toast.error(errMsg(e) ?? 'Could not impersonate this school'),
   });
 
   const copyCode = (s: School) => {
@@ -295,6 +325,18 @@ export function SchoolsPage() {
               title="Manage admin / reset password"
             >
               <UserCog className="h-4 w-4" />
+            </button>
+            <button
+              className="rounded-md p-1.5 text-slate-500 hover:bg-violet-50 hover:text-violet-600 disabled:opacity-50"
+              onClick={() => impersonate.mutate(s.id)}
+              disabled={impersonate.isPending}
+              title="Log in as this school's admin (impersonate)"
+            >
+              {impersonate.isPending && impersonate.variables === s.id ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Eye className="h-4 w-4" />
+              )}
             </button>
             {!s.isSchemaProvisioned && (
               <button

@@ -113,7 +113,7 @@ export interface Subscription {
   school?: School;
   plan?: Plan;
   status: 'trial' | 'active' | 'grace_period' | 'cancelled' | 'expired';
-  billingCycle: 'monthly' | 'yearly';
+  billingCycle: 'monthly' | 'yearly' | 'lifetime';
   amount: number;
   currency: string;
   trialEndsAt: string | null;
@@ -194,7 +194,25 @@ export const SchoolsApi = {
     data: { name?: string; email?: string; password?: string },
   ): Promise<{ id: string; name: string; email: string; created: boolean }> =>
     unwrap(await api.put(`/superadmin/schools/${id}/owner`, data)),
+  /** Issue a tenant session for the school's admin — no password needed. */
+  impersonate: async (id: string): Promise<ImpersonationSession> =>
+    unwrap(await api.post(`/superadmin/schools/${id}/impersonate`)),
 };
+
+/** Tenant session for the school owner, tagged so the UI knows it's borrowed. */
+export interface ImpersonationSession {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: string;
+    schoolId: string;
+    schoolSlug: string;
+  };
+  school: { id: string; slug: string; status: string };
+  tokens: { accessToken: string; refreshToken: string; expiresIn: number };
+  impersonating: true;
+}
 
 // ───── Organizations ────────────────────────────────────────────────────────
 export const OrganizationsApi = {

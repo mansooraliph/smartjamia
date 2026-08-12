@@ -18,11 +18,13 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { SuperadminGuard } from '../../../common/guards/superadmin.guard';
+import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { SchoolsService } from './schools.service';
 import { SchoolProvisioningService } from './school-provisioning.service';
 import { CreateSchoolDto } from './dto/create-school.dto';
 import { UpdateSchoolDto } from './dto/update-school.dto';
 import { SetOwnerDto } from './dto/set-owner.dto';
+import { AuthService } from '../../auth/auth.service';
 
 @ApiTags('superadmin/schools')
 @ApiBearerAuth('bearer')
@@ -32,6 +34,7 @@ export class SchoolsController {
   constructor(
     private readonly schools: SchoolsService,
     private readonly provisioning: SchoolProvisioningService,
+    private readonly auth: AuthService,
   ) {}
 
   @Get()
@@ -77,6 +80,18 @@ export class SchoolsController {
     @Body() dto: SetOwnerDto,
   ) {
     return this.schools.setOwner(id, dto);
+  }
+
+  @Post(':id/impersonate')
+  @ApiOperation({
+    summary:
+      "Impersonate this school's admin (owner) — issues a tenant session for support/testing, no password needed",
+  })
+  impersonate(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser('sub') superadminId: string,
+  ) {
+    return this.auth.impersonateSchool(id, superadminId);
   }
 
   @Post(':id/provision')

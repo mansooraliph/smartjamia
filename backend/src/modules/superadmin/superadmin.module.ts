@@ -30,8 +30,10 @@ import { OrgPortalService } from './organization-portal/org-portal.service';
 
 import { SuperadminGuard } from '../../common/guards/superadmin.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
+  imports: [AuthModule],
   controllers: [
     PlansController,
     SchoolsController,

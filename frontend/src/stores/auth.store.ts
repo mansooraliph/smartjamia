@@ -42,6 +42,13 @@ interface AuthState {
   orgAdmin: AuthUser | null;
   orgSchools: AccountSchool[] | null;
 
+  /** Superadmin origin context — kept while impersonating a school's admin
+   * for support/testing, so the UI can show a banner and hand the session
+   * back to the superadmin without a fresh login. */
+  impersonatorToken: string | null;
+  impersonatorRefreshToken: string | null;
+  impersonatorUser: AuthUser | null;
+
   login: (params: {
     user: AuthUser;
     accessToken: string;
@@ -75,6 +82,17 @@ interface AuthState {
   /** Restore the org-admin session (return from a school to the org portal). */
   returnToOrg: () => void;
 
+  /** Enter a school as its admin from the superadmin panel (impersonation). */
+  enterImpersonation: (params: {
+    user: AuthUser;
+    accessToken: string;
+    refreshToken: string;
+    schoolSlug: string;
+  }) => void;
+
+  /** Restore the superadmin session (return from an impersonated school). */
+  returnFromImpersonation: () => void;
+
   setTokens: (accessToken: string, refreshToken: string) => void;
   setSchool: (slug: string) => void;
   setUser: (user: AuthUser | null) => void;
@@ -96,6 +114,9 @@ export const useAuthStore = create<AuthState>()(
       orgRefreshToken: null,
       orgAdmin: null,
       orgSchools: null,
+      impersonatorToken: null,
+      impersonatorRefreshToken: null,
+      impersonatorUser: null,
 
       // A plain login (school / superadmin / org) clears any origin context so
       // a stale switcher can't leak between sessions.
@@ -111,6 +132,9 @@ export const useAuthStore = create<AuthState>()(
           orgRefreshToken: null,
           orgAdmin: null,
           orgSchools: null,
+          impersonatorToken: null,
+          impersonatorRefreshToken: null,
+          impersonatorUser: null,
         }),
 
       enterSchoolSession: ({ user, accessToken, refreshToken, schoolSlug }) =>
@@ -137,6 +161,40 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
+      enterImpersonation: ({ user, accessToken, refreshToken, schoolSlug }) => {
+        const current = get();
+        set({
+          impersonatorToken: current.accessToken,
+          impersonatorRefreshToken: current.refreshToken,
+          impersonatorUser: current.user,
+          user,
+          accessToken,
+          refreshToken,
+          schoolSlug,
+          accountToken: null,
+          accountSchools: null,
+          orgToken: null,
+          orgRefreshToken: null,
+          orgAdmin: null,
+          orgSchools: null,
+        });
+      },
+
+      returnFromImpersonation: () => {
+        const { impersonatorUser, impersonatorToken, impersonatorRefreshToken } =
+          get();
+        if (!impersonatorUser || !impersonatorToken) return;
+        set({
+          user: impersonatorUser,
+          accessToken: impersonatorToken,
+          refreshToken: impersonatorRefreshToken,
+          schoolSlug: null,
+          impersonatorToken: null,
+          impersonatorRefreshToken: null,
+          impersonatorUser: null,
+        });
+      },
+
       setTokens: (accessToken, refreshToken) =>
         set({ accessToken, refreshToken }),
 
@@ -156,6 +214,9 @@ export const useAuthStore = create<AuthState>()(
           orgRefreshToken: null,
           orgAdmin: null,
           orgSchools: null,
+          impersonatorToken: null,
+          impersonatorRefreshToken: null,
+          impersonatorUser: null,
         }),
 
       isAuthenticated: () => !!get().accessToken,
@@ -173,6 +234,9 @@ export const useAuthStore = create<AuthState>()(
         orgRefreshToken: state.orgRefreshToken,
         orgAdmin: state.orgAdmin,
         orgSchools: state.orgSchools,
+        impersonatorToken: state.impersonatorToken,
+        impersonatorRefreshToken: state.impersonatorRefreshToken,
+        impersonatorUser: state.impersonatorUser,
       }),
     },
   ),

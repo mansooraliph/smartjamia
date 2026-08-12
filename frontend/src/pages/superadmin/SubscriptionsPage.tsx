@@ -19,7 +19,9 @@ import { Field, Input, Select } from '@/components/ui/Input';
 import { formatDate, formatMoney, paiseToRupees, rupeesToPaise } from '@/lib/format';
 
 const SUB_STATUSES = ['trial', 'active', 'grace_period', 'cancelled', 'expired'] as const;
-const CYCLES = ['monthly', 'yearly'] as const;
+const CYCLES = ['monthly', 'yearly', 'lifetime'] as const;
+/** Sentinel "never expires" date the backend stores for lifetime subscriptions. */
+const LIFETIME_YEAR = 2099;
 const GATEWAYS = ['razorpay', 'stripe', 'manual'] as const;
 
 const schema = z.object({
@@ -168,12 +170,17 @@ export function SubscriptionsPage() {
           {
             key: 'period',
             header: 'Period',
-            render: (s) => (
-              <span className="text-xs text-slate-600">
-                {formatDate(s.currentPeriodStart)} →{' '}
-                {formatDate(s.currentPeriodEnd)}
-              </span>
-            ),
+            render: (s) =>
+              s.billingCycle === 'lifetime' ||
+              (s.currentPeriodEnd &&
+                new Date(s.currentPeriodEnd).getFullYear() >= LIFETIME_YEAR) ? (
+                <Badge tone="indigo">Lifetime — never expires</Badge>
+              ) : (
+                <span className="text-xs text-slate-600">
+                  {formatDate(s.currentPeriodStart)} →{' '}
+                  {formatDate(s.currentPeriodEnd)}
+                </span>
+              ),
           },
           {
             key: 'gateway',
@@ -318,7 +325,7 @@ function SubFormModal({
   const suggested = useMemo(() => {
     if (sub) return null;
     const plan = plans.find((p) => p.id === watchPlanId);
-    if (!plan) return null;
+    if (!plan || watchCycle === 'lifetime') return null;
     return watchCycle === 'monthly'
       ? paiseToRupees(plan.priceMonthly)
       : paiseToRupees(plan.priceYearly);
@@ -375,7 +382,14 @@ function SubFormModal({
           </Select>
         </Field>
 
-        <Field label="Billing cycle">
+        <Field
+          label="Billing cycle"
+          hint={
+            watchCycle === 'lifetime'
+              ? 'One-time payment — this school never expires.'
+              : undefined
+          }
+        >
           <Select {...register('billingCycle')}>
             {CYCLES.map((c) => (
               <option key={c} value={c} className="capitalize">

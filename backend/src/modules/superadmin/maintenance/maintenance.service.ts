@@ -59,27 +59,50 @@ export class MaintenanceService {
     }[] = [];
 
     for (const s of schools) {
-      // Paid schools expire on subscriptionEndsAt; trials on trialEndsAt.
-      const end = s.subscriptionEndsAt ?? s.trialEndsAt;
+      const sub = await this.subs.findOne({
+        where: { schoolId: s.id },
+        order: { createdAt: 'DESC' },
+      });
+
+      // Paid schools expire on subscriptionEndsAt; trials on trialEndsAt. Fall
+      // back to the subscription's own period end if the school row is out of
+      // sync (e.g. a subscription assigned before school.subscriptionEndsAt
+      // was kept in sync) so a school with a live subscription doesn't get
+      // expired off its long-past trial date.
+      const activeSub =
+        sub && sub.status !== 'cancelled' && sub.status !== 'expired'
+          ? sub
+          : null;
+      const end =
+        s.subscriptionEndsAt ?? activeSub?.currentPeriodEnd ?? s.trialEndsAt;
       if (!end) continue;
       const endMs = new Date(end).getTime();
-      const base: SchoolStatus = s.subscriptionEndsAt ? 'active' : 'trial';
+      const base: SchoolStatus =
+        s.subscriptionEndsAt || activeSub?.currentPeriodEnd
+          ? 'active'
+          : 'trial';
+
+      // Repair a school row that's missing this even when status won't change.
+      const needsRepair = !s.subscriptionEndsAt && !!activeSub?.currentPeriodEnd;
+      if (needsRepair) {
+        s.subscriptionStartsAt = activeSub!.currentPeriodStart;
+        s.subscriptionEndsAt = activeSub!.currentPeriodEnd;
+      }
 
       let target: SchoolStatus;
       if (now.getTime() <= endMs) target = base; // active/trial (or restored on renewal)
       else if (now.getTime() <= endMs + graceMs) target = 'grace_period';
       else target = 'suspended';
 
-      if (target === s.status) continue;
+      if (target === s.status) {
+        if (needsRepair) await this.schools.save(s);
+        continue;
+      }
 
       const from = s.status as SchoolStatus;
       s.status = target;
       await this.schools.save(s);
 
-      const sub = await this.subs.findOne({
-        where: { schoolId: s.id },
-        order: { createdAt: 'DESC' },
-      });
       if (sub) {
         sub.status =
           target === 'suspended'

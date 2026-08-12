@@ -18,7 +18,7 @@ export type SubStatus =
   | 'cancelled'
   | 'expired';
 
-export type BillingCycle = 'monthly' | 'yearly';
+export type BillingCycle = 'monthly' | 'yearly' | 'lifetime';
 export type PaymentGatewayType = 'razorpay' | 'stripe' | 'manual';
 
 @Entity({ name: 'subscriptions' })
@@ -50,7 +50,7 @@ export class Subscription {
 
   @Column({
     type: 'enum',
-    enum: ['monthly', 'yearly'],
+    enum: ['monthly', 'yearly', 'lifetime'],
     name: 'billing_cycle',
     default: 'monthly',
   })

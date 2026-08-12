@@ -30,6 +30,7 @@ import { useTerminology } from '@/hooks/useTerminology';
 import { usePermissions } from '@/hooks/usePermissions';
 import { canAccessPath } from '@/lib/access';
 import { TrialBanner } from './TrialBanner';
+import { ImpersonationBanner } from './ImpersonationBanner';
 import { SchoolSwitcher } from './SchoolSwitcher';
 import { cn } from '@/lib/cn';
 
@@ -273,6 +274,7 @@ export function SchoolLayout() {
           </div>
         </header>
 
+        <ImpersonationBanner />
         <TrialBanner />
         <main className="flex-1 overflow-auto p-6">
           <Outlet />
