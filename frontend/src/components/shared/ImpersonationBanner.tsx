@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { Eye, ArrowLeftCircle } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -7,17 +6,17 @@ import { useAuthStore } from '@/stores/auth.store';
  * jump back to the superadmin panel without a fresh login. */
 export function ImpersonationBanner() {
   const navigate = useNavigate();
-  const qc = useQueryClient();
   const impersonatorUser = useAuthStore((s) => s.impersonatorUser);
-  const returnFromImpersonation = useAuthStore((s) => s.returnFromImpersonation);
   const user = useAuthStore((s) => s.user);
 
   if (!impersonatorUser) return null;
 
+  // Route through the neutral handoff page rather than swapping session
+  // state here — this component renders under ProtectedRoute, and flipping
+  // schoolSlug/user while still on a guarded route races that guard's own
+  // re-render against navigate(), which can bounce to /login first.
   const exit = () => {
-    returnFromImpersonation();
-    qc.clear();
-    navigate('/superadmin/schools');
+    navigate('/impersonate-handoff', { state: { action: 'return' } });
   };
 
   return (

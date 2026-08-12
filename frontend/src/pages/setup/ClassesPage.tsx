@@ -3,7 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Pencil, Trash2, Users, GraduationCap, Layers } from 'lucide-react';
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Users,
+  GraduationCap,
+  Layers,
+  LayoutGrid,
+} from 'lucide-react';
 import {
   AcademicYearsApi,
   ClassEntity,
@@ -22,6 +30,7 @@ import { useTerminology } from '@/hooks/useTerminology';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { DataTable } from '@/components/ui/DataTable';
 import { Field, Input, Select } from '@/components/ui/Input';
 import { cn } from '@/lib/cn';
 
@@ -60,12 +69,16 @@ const sectionSchema = z.object({
 });
 type SectionForm = z.infer<typeof sectionSchema>;
 
+type TabKey = 'classes' | 'sections';
+
 export function ClassesPage() {
   const qc = useQueryClient();
   const term = useTerminology();
   const isCollege = term.institutionType === 'college';
+  const [tab, setTab] = useState<TabKey>('classes');
   const [yearFilter, setYearFilter] = useState<string>('');
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
+  const [sectionsClassFilter, setSectionsClassFilter] = useState<string>('');
 
   const { data: years = [] } = useQuery({
     queryKey: ['academic-years'],
@@ -176,7 +189,7 @@ export function ClassesPage() {
 
   const renderClassCard = (cls: ClassEntity) => (
     <div key={cls.id} className="card overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-5 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-slate-900">{cls.name}</h3>
           <Badge tone="slate">
@@ -185,13 +198,7 @@ export function ClassesPage() {
         </div>
         <div className="flex items-center gap-1">
           <button
-            className="btn bg-slate-200 px-2.5 py-1 text-xs hover:bg-slate-300"
-            onClick={() => setSectionModal({ open: true, classId: cls.id })}
-          >
-            <Plus className="mr-1 h-3 w-3" /> Add {term.group.toLowerCase()}
-          </button>
-          <button
-            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-200 hover:text-brand-700"
+            className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-700"
             onClick={() => setClassModal({ open: true, cls })}
             title="Edit"
           >
@@ -206,59 +213,20 @@ export function ClassesPage() {
           </button>
         </div>
       </div>
-
-      <div className="divide-y divide-slate-100">
-        {cls.sections && cls.sections.length > 0 ? (
-          cls.sections.map((sec) => (
-            <div
-              key={sec.id}
-              className="flex items-center justify-between px-5 py-3 hover:bg-slate-50"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-8 w-8 items-center justify-center rounded-md bg-brand-50 text-sm font-semibold text-brand-700">
-                  {sec.name}
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-slate-900">
-                    {term.group} {sec.name}
-                  </div>
-                  <div className="flex items-center gap-1 text-xs text-slate-500">
-                    <Users className="h-3 w-3" /> capacity {sec.capacity}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                <button
-                  className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-600"
-                  onClick={() =>
-                    setSectionModal({
-                      open: true,
-                      classId: cls.id,
-                      section: sec,
-                    })
-                  }
-                  title="Edit"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-                <button
-                  className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                  onClick={() => setSectionConfirm({ open: true, section: sec })}
-                  title="Delete"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          ))
-        ) : (
-          <div className="px-5 py-6 text-center text-sm text-slate-400">
-            No {term.groupPlural.toLowerCase()} — add one with the button above.
-          </div>
-        )}
-      </div>
     </div>
   );
+
+  // Flat list of every section across all classes, for the Sections tab.
+  const allSections = useMemo(
+    () =>
+      classes.flatMap((cls) =>
+        (cls.sections ?? []).map((sec) => ({ ...sec, cls })),
+      ),
+    [classes],
+  );
+  const visibleSections = sectionsClassFilter
+    ? allSections.filter((s) => s.classId === sectionsClassFilter)
+    : allSections;
 
   if (years.length === 0) {
     return (
@@ -296,27 +264,86 @@ export function ClassesPage() {
                 </option>
               ))}
             </Select>
-            <ExportButtons
-              onExport={(format: ExportFormat) =>
-                ClassesApi.export(format, effectiveYearId || undefined)
-              }
-            />
-            <button
-              className="btn-primary"
-              onClick={() => setClassModal({ open: true })}
-              disabled={isCollege && courses.length === 0}
-              title={
-                isCollege && courses.length === 0
-                  ? 'Create a course first'
-                  : undefined
-              }
-            >
-              <Plus className="mr-1.5 h-4 w-4" /> New {term.level.toLowerCase()}
-            </button>
+            {tab === 'classes' ? (
+              <>
+                <ExportButtons
+                  onExport={(format: ExportFormat) =>
+                    ClassesApi.export(format, effectiveYearId || undefined)
+                  }
+                />
+                <button
+                  className="btn-primary"
+                  onClick={() => setClassModal({ open: true })}
+                  disabled={isCollege && courses.length === 0}
+                  title={
+                    isCollege && courses.length === 0
+                      ? 'Create a course first'
+                      : undefined
+                  }
+                >
+                  <Plus className="mr-1.5 h-4 w-4" /> New{' '}
+                  {term.level.toLowerCase()}
+                </button>
+              </>
+            ) : (
+              <button
+                className="btn-primary"
+                onClick={() =>
+                  setSectionModal({
+                    open: true,
+                    classId: sectionsClassFilter || classes[0]?.id,
+                  })
+                }
+                disabled={classes.length === 0}
+                title={
+                  classes.length === 0
+                    ? `Create a ${term.level.toLowerCase()} first`
+                    : undefined
+                }
+              >
+                <Plus className="mr-1.5 h-4 w-4" /> New{' '}
+                {term.group.toLowerCase()}
+              </button>
+            )}
           </div>
         }
       />
 
+      {/* Tabs */}
+      <div className="mb-6 border-b border-slate-200">
+        <nav className="-mb-px flex gap-1">
+          {(
+            [
+              {
+                key: 'classes' as const,
+                label: isCollege ? 'Courses' : term.levelPlural,
+                icon: isCollege ? Layers : LayoutGrid,
+              },
+              { key: 'sections' as const, label: term.groupPlural, icon: Users },
+            ]
+          ).map((t) => {
+            const Icon = t.icon;
+            const active = tab === t.key;
+            return (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 border-b-2 px-3 pb-2.5 text-sm font-medium',
+                  active
+                    ? 'border-brand-500 text-brand-700'
+                    : 'border-transparent text-slate-500 hover:text-slate-700',
+                )}
+              >
+                <Icon className="h-4 w-4" /> {t.label}
+              </button>
+            );
+          })}
+        </nav>
+      </div>
+
+      {tab === 'classes' && (
+        <>
       {isCollege && (
         <div className="mb-4 rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
@@ -468,6 +495,86 @@ export function ClassesPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {classes.map(renderClassCard)}
         </div>
+      )}
+        </>
+      )}
+      {tab === 'sections' && (
+        <>
+          {classes.length > 0 && (
+            <div className="mb-4 flex items-center gap-2">
+              <Select
+                className="!w-64"
+                value={sectionsClassFilter}
+                onChange={(e) => setSectionsClassFilter(e.target.value)}
+              >
+                <option value="">
+                  All {term.levelPlural.toLowerCase()}
+                </option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {classLabel(c)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
+
+          <DataTable
+            rows={visibleSections}
+            getRowId={(r) => r.id}
+            isLoading={isLoading}
+            emptyMessage={`No ${term.groupPlural.toLowerCase()} yet.`}
+            columns={[
+              {
+                key: 'class',
+                header: term.level,
+                render: (r) => classLabel(r.cls),
+              },
+              {
+                key: 'name',
+                header: `${term.group} name`,
+                render: (r) => (
+                  <span className="font-medium text-slate-900">
+                    {r.name}
+                  </span>
+                ),
+              },
+              {
+                key: 'capacity',
+                header: 'Capacity',
+                render: (r) => (
+                  <span className="inline-flex items-center gap-1 text-slate-600">
+                    <Users className="h-3.5 w-3.5" /> {r.capacity}
+                  </span>
+                ),
+              },
+            ]}
+            actions={(r) => (
+              <>
+                <button
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-brand-600"
+                  onClick={() =>
+                    setSectionModal({
+                      open: true,
+                      classId: r.classId,
+                      section: r,
+                    })
+                  }
+                  title="Edit"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                  onClick={() => setSectionConfirm({ open: true, section: r })}
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          />
+        </>
       )}
 
       <ClassFormModal

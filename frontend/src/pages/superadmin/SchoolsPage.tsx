@@ -26,7 +26,6 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { formatDate } from '@/lib/format';
-import { useAuthStore } from '@/stores/auth.store';
 import { toast } from '@/stores/toast.store';
 import { OwnerModal, SchoolFormModal } from '@/components/superadmin/SchoolModals';
 
@@ -44,7 +43,6 @@ const statusTone: Record<
 export function SchoolsPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const enterImpersonation = useAuthStore((s) => s.enterImpersonation);
   const [modal, setModal] = useState<{ open: boolean; school?: School }>({
     open: false,
   });
@@ -111,22 +109,25 @@ export function SchoolsPage() {
   const impersonate = useMutation({
     mutationFn: (id: string) => SchoolsApi.impersonate(id),
     onSuccess: (session) => {
-      enterImpersonation({
-        user: {
-          id: session.user.id,
-          name: session.user.name,
-          email: session.user.email,
-          role: session.user.role,
-          schoolId: session.user.schoolId,
-          schoolSlug: session.user.schoolSlug,
-          scope: 'tenant',
+      navigate('/impersonate-handoff', {
+        state: {
+          action: 'enter',
+          session: {
+            user: {
+              id: session.user.id,
+              name: session.user.name,
+              email: session.user.email,
+              role: session.user.role,
+              schoolId: session.user.schoolId,
+              schoolSlug: session.user.schoolSlug,
+              scope: 'tenant',
+            },
+            accessToken: session.tokens.accessToken,
+            refreshToken: session.tokens.refreshToken,
+            schoolSlug: session.school.slug,
+          },
         },
-        accessToken: session.tokens.accessToken,
-        refreshToken: session.tokens.refreshToken,
-        schoolSlug: session.school.slug,
       });
-      qc.clear();
-      navigate('/dashboard');
     },
     onError: (e) =>
       toast.error(errMsg(e) ?? 'Could not impersonate this school'),

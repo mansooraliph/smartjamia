@@ -30,7 +30,6 @@ import {
 import { Badge } from '@/components/ui/Badge';
 import { DataTable } from '@/components/ui/DataTable';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
-import { useAuthStore } from '@/stores/auth.store';
 import { toast } from '@/stores/toast.store';
 import { OwnerModal, SchoolFormModal } from '@/components/superadmin/SchoolModals';
 
@@ -67,7 +66,6 @@ export function SchoolDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const enterImpersonation = useAuthStore((s) => s.enterImpersonation);
   const [tab, setTab] = useState<TabKey>('overview');
   const [editOpen, setEditOpen] = useState(false);
   const [ownerOpen, setOwnerOpen] = useState(false);
@@ -114,22 +112,25 @@ export function SchoolDetailPage() {
   const impersonate = useMutation({
     mutationFn: () => SchoolsApi.impersonate(id),
     onSuccess: (session) => {
-      enterImpersonation({
-        user: {
-          id: session.user.id,
-          name: session.user.name,
-          email: session.user.email,
-          role: session.user.role,
-          schoolId: session.user.schoolId,
-          schoolSlug: session.user.schoolSlug,
-          scope: 'tenant',
+      navigate('/impersonate-handoff', {
+        state: {
+          action: 'enter',
+          session: {
+            user: {
+              id: session.user.id,
+              name: session.user.name,
+              email: session.user.email,
+              role: session.user.role,
+              schoolId: session.user.schoolId,
+              schoolSlug: session.user.schoolSlug,
+              scope: 'tenant',
+            },
+            accessToken: session.tokens.accessToken,
+            refreshToken: session.tokens.refreshToken,
+            schoolSlug: session.school.slug,
+          },
         },
-        accessToken: session.tokens.accessToken,
-        refreshToken: session.tokens.refreshToken,
-        schoolSlug: session.school.slug,
       });
-      qc.clear();
-      navigate('/dashboard');
     },
     onError: (e) =>
       toast.error(errMsg(e) ?? 'Could not impersonate this school'),

@@ -31,6 +31,7 @@ import { LandingPage } from '@/pages/public/LandingPage';
 import { PricingPage } from '@/pages/public/PricingPage';
 import { SignupPage } from '@/pages/public/SignupPage';
 import { NotFoundPage } from '@/pages/NotFoundPage';
+import { ImpersonationHandoffPage } from '@/pages/ImpersonationHandoffPage';
 import { PagePlaceholder } from '@/pages/_PagePlaceholder';
 
 import { PortalLoginPage } from '@/pages/portal/PortalLoginPage';
@@ -124,6 +125,9 @@ export function AppRoutes() {
           </OrgRoute>
         }
       />
+
+      {/* Impersonation handoff — unguarded, sits between superadmin and tenant sessions */}
+      <Route path="/impersonate-handoff" element={<ImpersonationHandoffPage />} />
 
       {/* Superadmin portal */}
       <Route path="/superadmin/login" element={<SuperadminLoginPage />} />
