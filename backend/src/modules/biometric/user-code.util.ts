@@ -7,7 +7,7 @@ import { SchoolProfile } from '../../database/tenant/school-profile.entity';
  * back to its user type. Prefixes are configurable per school (device settings,
  * stored in school_profile.settings.biometricPrefixes); these are the defaults:
  *
- *   Student  → `S` + admission_number
+ *   Student  → `S` + student_id (falls back to admission_number when unset)
  *   Teacher  → `T` + employee_id
  *   Staff    → `E` + employee_id      (non-teaching)
  *   Visitor  → `V` + short visitor id

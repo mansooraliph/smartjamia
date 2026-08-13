@@ -420,16 +420,24 @@ export class BiometricDevicesService {
     return this.tenant.runInSchema(schemaName, async (em) => {
       const prefixes = await loadBiometricPrefixes(em, schoolId);
       const student = await em.getRepository(Student).findOne({
-        where: { schoolId, admissionNumber: rawCode },
+        where: [
+          { schoolId, studentId: rawCode },
+          { schoolId, admissionNumber: rawCode },
+        ],
         select: {
           id: true,
           admissionNumber: true,
+          studentId: true,
           studentName: true,
         },
       });
       if (student) {
         return {
-          userCode: buildUserCode('student', student.admissionNumber, prefixes),
+          userCode: buildUserCode(
+            'student',
+            student.studentId ?? student.admissionNumber,
+            prefixes,
+          ),
           name: student.studentName,
         };
       }
@@ -521,10 +529,14 @@ export class BiometricDevicesService {
         return rows.map((s) => ({
           id: s.id,
           userType: 'student' as const,
-          code: s.admissionNumber,
-          userCode: buildUserCode('student', s.admissionNumber, prefixes),
+          code: s.studentId ?? s.admissionNumber,
+          userCode: buildUserCode(
+            'student',
+            s.studentId ?? s.admissionNumber,
+            prefixes,
+          ),
           name: s.studentName,
-          subtitle: s.admissionNumber,
+          subtitle: s.studentId ?? s.admissionNumber,
           enrollmentStatus: statusById.get(s.id) ?? 'none',
         }));
       }
@@ -618,6 +630,7 @@ export class BiometricDevicesService {
           select: {
             id: true,
             admissionNumber: true,
+            studentId: true,
             studentName: true,
           },
         });
@@ -625,10 +638,14 @@ export class BiometricDevicesService {
         return {
           id: s.id,
           userType: 'student',
-          code: s.admissionNumber,
-          userCode: buildUserCode('student', s.admissionNumber, prefixes),
+          code: s.studentId ?? s.admissionNumber,
+          userCode: buildUserCode(
+            'student',
+            s.studentId ?? s.admissionNumber,
+            prefixes,
+          ),
           name: s.studentName,
-          subtitle: s.admissionNumber,
+          subtitle: s.studentId ?? s.admissionNumber,
         };
       }
       if (type === 'teacher' || type === 'staff') {
@@ -847,7 +864,7 @@ export class BiometricDevicesService {
       const prefixes = await loadBiometricPrefixes(em, schoolId);
       const students = await em.getRepository(Student).find({
         where: { schoolId, status: 'active' as any },
-        select: { admissionNumber: true, studentName: true },
+        select: { admissionNumber: true, studentId: true, studentName: true },
       });
       const staff = await em.getRepository(Staff).find({
         where: { schoolId, status: 'active' as any },
@@ -866,7 +883,11 @@ export class BiometricDevicesService {
       const cmds: string[] = [];
       for (const s of students) {
         const name = s.studentName;
-        const code = buildUserCode('student', s.admissionNumber, prefixes);
+        const code = buildUserCode(
+          'student',
+          s.studentId ?? s.admissionNumber,
+          prefixes,
+        );
         cmds.push(this.buildAddUserCommand(code, name));
       }
       for (const st of staff) {

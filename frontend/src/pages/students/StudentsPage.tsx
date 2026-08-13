@@ -590,10 +590,10 @@ export function StudentsPage() {
             {
               id: enrollTarget.id,
               userType: 'student',
-              code: enrollTarget.admissionNumber,
-              userCode: enrollTarget.admissionNumber,
+              code: enrollTarget.studentId ?? enrollTarget.admissionNumber,
+              userCode: enrollTarget.studentId ?? enrollTarget.admissionNumber,
               name: enrollTarget.studentName,
-              subtitle: enrollTarget.admissionNumber,
+              subtitle: enrollTarget.studentId ?? enrollTarget.admissionNumber,
               enrollmentStatus: enrollTarget.biometricStatus ?? 'none',
             } as EnrollableUser
           }

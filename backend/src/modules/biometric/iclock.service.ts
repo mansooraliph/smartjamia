@@ -629,14 +629,22 @@ export class IclockService {
       staffBases.set(raw, arr);
     }
 
-    // Students.
+    // Students. Enrollment prefers `studentId` as the PIN base, falling back
+    // to `admissionNumber` — so incoming PINs must match against either
+    // (older enrollments still carry admission-number-based PINs).
     if (studentBases.size) {
+      const bases = [...studentBases.keys()];
       const students = await em.getRepository(Student).find({
-        where: { schoolId, admissionNumber: In([...studentBases.keys()]) },
-        select: { id: true, admissionNumber: true },
+        where: [
+          { schoolId, studentId: In(bases) },
+          { schoolId, admissionNumber: In(bases) },
+        ],
+        select: { id: true, admissionNumber: true, studentId: true },
       });
       for (const s of students) {
-        const raw = studentBases.get(s.admissionNumber);
+        const raw =
+          (s.studentId && studentBases.get(s.studentId)) ||
+          studentBases.get(s.admissionNumber);
         if (raw)
           map.set(raw, {
             studentId: s.id,
