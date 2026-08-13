@@ -10,6 +10,7 @@ import { Staff } from '../../../database/tenant/staff.entity';
 import { User } from '../../../database/tenant/user.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
 import { paginate } from '../../../common/dto/pagination.dto';
+import { getBiometricStatusMap } from '../../../common/biometric/biometric-status.util';
 import { CreateStaffDto, UpdateStaffDto } from './dto/staff.dto';
 
 export interface StaffListOpts {
@@ -71,13 +72,27 @@ export class StaffService {
     return qb;
   }
 
-  private async attachUsers(em: EntityManager, staff: Staff[]) {
+  private async attachUsers(
+    em: EntityManager,
+    schoolId: string,
+    staff: Staff[],
+  ) {
     if (staff.length === 0) return [];
     const users = await em
       .getRepository(User)
       .find({ where: { id: In(staff.map((s) => s.userId)) } });
     const byId = new Map(users.map((u) => [u.id, u]));
-    return staff.map((s) => ({ ...s, user: byId.get(s.userId) ?? null }));
+    const bioStatus = await getBiometricStatusMap(
+      em,
+      schoolId,
+      'staffId',
+      staff.map((s) => s.id),
+    );
+    return staff.map((s) => ({
+      ...s,
+      user: byId.get(s.userId) ?? null,
+      biometricStatus: bioStatus.get(s.id) ?? 'none',
+    }));
   }
 
   list(schemaName: string, schoolId: string, opts: StaffListOpts = {}) {
@@ -88,7 +103,7 @@ export class StaffService {
         .skip((page - 1) * limit)
         .take(limit)
         .getManyAndCount();
-      const items = await this.attachUsers(em, staff);
+      const items = await this.attachUsers(em, schoolId, staff);
       return paginate(items, total, page, limit);
     });
   }
@@ -98,7 +113,7 @@ export class StaffService {
       const staff = await this.buildListQuery(em, schoolId, opts)
         .take(10000)
         .getMany();
-      const withUsers = await this.attachUsers(em, staff);
+      const withUsers = await this.attachUsers(em, schoolId, staff);
       return withUsers.map((s) => ({
         employeeId: s.employeeId,
         name: s.user?.name ?? '',

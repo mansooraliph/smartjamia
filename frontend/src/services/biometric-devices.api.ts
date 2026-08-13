@@ -89,6 +89,42 @@ export interface DevicePrefixes {
   visitor: string | null;
 }
 
+/** A single captured biometric template, as returned by GET /enrollments. */
+export interface EnrolledTemplate {
+  id: string;
+  userCode: string;
+  studentId: string | null;
+  staffId: string | null;
+  visitorId: string | null;
+  userType: EnrollUserType | null;
+  /** Display name captured at enrollment time. */
+  name: string | null;
+  /** 'pending' (admin queued) | 'enrolled' (template received). */
+  status: 'pending' | 'enrolled' | null;
+  deviceSn: string | null;
+  /** Device display name (alias, falls back to serial). */
+  deviceAlias: string | null;
+  /** 'FP' | 'FACE' | 'PALM' | 'USERPIC' | 'BIOPHOTO'. */
+  type: string;
+  index: string;
+  valid: string | null;
+  /** Resolved class name (students only, via their active enrollment). */
+  className: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListEnrollmentsParams {
+  page?: number;
+  limit?: number;
+  search?: string;
+  userType?: EnrollUserType;
+  classId?: string;
+  type?: string;
+  from?: string;
+  to?: string;
+}
+
 export interface UserSearchResult {
   id: string;
   userCode: string;
@@ -135,6 +171,10 @@ export const BiometricDevicesApi = {
     unwrap(await api.get(`${BASE}/transactions`, { params })),
   listCommands: async (id: string): Promise<BiometricCommand[]> =>
     unwrap(await api.get(`${BASE}/${id}/commands`)),
+  listEnrollments: async (
+    params: ListEnrollmentsParams,
+  ): Promise<Paginated<EnrolledTemplate>> =>
+    unwrap(await api.get(`${BASE}/enrollments`, { params })),
 
   // ── Mutations: rename / single actions ──────────────────────────────────────
   rename: async (id: string, alias: string): Promise<BiometricDeviceDto> =>

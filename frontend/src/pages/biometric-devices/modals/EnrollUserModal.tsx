@@ -38,6 +38,9 @@ const ENROLLMENT_STATUS_LABEL: Record<EnrollableUser['enrollmentStatus'], string
 interface Props {
   devices: BiometricDeviceDto[];
   presetDeviceIds?: string[];
+  /** Pre-select a specific user (e.g. from a list row's "quick enroll" action)
+   *  and skip the search step — only biometric type + devices remain. */
+  presetUser?: EnrollableUser;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -45,14 +48,19 @@ interface Props {
 export function EnrollUserModal({
   devices,
   presetDeviceIds,
+  presetUser,
   onClose,
   onSuccess,
 }: Props) {
-  const [userType, setUserType] = useState<EnrollUserType>('student');
+  const [userType, setUserType] = useState<EnrollUserType>(
+    presetUser?.userType ?? 'student',
+  );
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [classId, setClassId] = useState('');
-  const [selected, setSelected] = useState<EnrollableUser | null>(null);
+  const [selected, setSelected] = useState<EnrollableUser | null>(
+    presetUser ?? null,
+  );
   const [bioType, setBioType] = useState<BiometricType>('fingerprint');
   const [fingerId, setFingerId] = useState(6);
   const [deviceIds, setDeviceIds] = useState<Set<string>>(
@@ -148,27 +156,31 @@ export function EnrollUserModal({
       }
     >
       {/* User type */}
-      <label className="mb-1 block text-sm font-medium text-slate-700">
-        User Type
-      </label>
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {ENROLL_USER_TYPES.map((u) => (
-          <button
-            key={u.value}
-            type="button"
-            onClick={() => setUserType(u.value)}
-            className={cn(
-              'flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-sm font-medium transition',
-              userType === u.value
-                ? 'border-brand-500 bg-brand-50 text-brand-700'
-                : 'border-slate-300 text-slate-600 hover:bg-slate-50',
-            )}
-          >
-            <span>{u.icon}</span>
-            {u.label}
-          </button>
-        ))}
-      </div>
+      {!presetUser && (
+        <>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            User Type
+          </label>
+          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {ENROLL_USER_TYPES.map((u) => (
+              <button
+                key={u.value}
+                type="button"
+                onClick={() => setUserType(u.value)}
+                className={cn(
+                  'flex items-center justify-center gap-1.5 rounded-md border px-2 py-2 text-sm font-medium transition',
+                  userType === u.value
+                    ? 'border-brand-500 bg-brand-50 text-brand-700'
+                    : 'border-slate-300 text-slate-600 hover:bg-slate-50',
+                )}
+              >
+                <span>{u.icon}</span>
+                {u.label}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* User search / selection */}
       {selected ? (
@@ -183,16 +195,18 @@ export function EnrollUserModal({
                   {selected.name}
                 </div>
                 <div className="text-xs text-slate-500">
-                  PIN {selected.userCode}
+                  ID {selected.code}
                 </div>
               </div>
             </div>
-            <button
-              className="text-xs font-medium text-brand-700 hover:underline"
-              onClick={() => setSelected(null)}
-            >
-              Change
-            </button>
+            {!presetUser && (
+              <button
+                className="text-xs font-medium text-brand-700 hover:underline"
+                onClick={() => setSelected(null)}
+              >
+                Change
+              </button>
+            )}
           </div>
         </Field>
       ) : (

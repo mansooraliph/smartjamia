@@ -9,8 +9,10 @@ import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload, Fingerprint } from 'lucide-react';
 import { ExportFormat, RbacApi, Staff, StaffApi } from '@/services/school.api';
+import { BiometricDevicesApi, EnrollableUser } from '@/services/biometric-devices.api';
+import { EnrollUserModal } from '@/pages/biometric-devices/modals/EnrollUserModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
 import { Pagination } from '@/components/ui/Pagination';
@@ -69,6 +71,17 @@ const roleTone: Record<string, 'blue' | 'indigo' | 'purple' | 'slate'> = {
   cashier: 'indigo',
 };
 
+const BIO_ICON_TONE: Record<'enrolled' | 'pending' | 'none', string> = {
+  enrolled: 'text-green-600',
+  pending: 'text-amber-500',
+  none: 'text-slate-300',
+};
+const BIO_TITLE: Record<'enrolled' | 'pending' | 'none', string> = {
+  enrolled: 'Biometric enrolled',
+  pending: 'Biometric enrollment pending',
+  none: 'Not enrolled — click to quick-enroll',
+};
+
 export function StaffPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -83,6 +96,12 @@ export function StaffPage() {
   const [importOpen, setImportOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
+  const [enrollTarget, setEnrollTarget] = useState<Staff | null>(null);
+  const { data: bioDevices = [] } = useQuery({
+    queryKey: ['bio-devices'],
+    queryFn: BiometricDevicesApi.listDevices,
+    enabled: !!enrollTarget,
+  });
 
   useEffect(() => {
     setPage(1);
@@ -245,6 +264,22 @@ export function StaffPage() {
             header: 'Status',
             render: (s) => <Badge tone={statusTone[s.status]}>{s.status}</Badge>,
           },
+          {
+            key: 'biometric',
+            header: 'Biometric',
+            render: (s) => {
+              const status = s.biometricStatus ?? 'none';
+              return (
+                <button
+                  className={`rounded-md p-1 hover:bg-slate-100 ${BIO_ICON_TONE[status]}`}
+                  onClick={() => setEnrollTarget(s)}
+                  title={BIO_TITLE[status]}
+                >
+                  <Fingerprint className="h-4 w-4" />
+                </button>
+              );
+            },
+          },
         ]}
         actions={(s) => (
           <>
@@ -274,6 +309,32 @@ export function StaffPage() {
           limit={pageData.limit}
           onPageChange={setPage}
           onLimitChange={setLimit}
+        />
+      )}
+
+      {enrollTarget && (
+        <EnrollUserModal
+          devices={bioDevices}
+          presetUser={
+            {
+              id: enrollTarget.id,
+              userType:
+                (enrollTarget.user?.roleKey || enrollTarget.user?.role) ===
+                'teacher'
+                  ? 'teacher'
+                  : 'staff',
+              code: enrollTarget.employeeId,
+              userCode: enrollTarget.employeeId,
+              name: enrollTarget.user?.name ?? enrollTarget.employeeId,
+              subtitle: enrollTarget.employeeId,
+              enrollmentStatus: enrollTarget.biometricStatus ?? 'none',
+            } as EnrollableUser
+          }
+          onClose={() => setEnrollTarget(null)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['staff'] });
+            setEnrollTarget(null);
+          }}
         />
       )}
 

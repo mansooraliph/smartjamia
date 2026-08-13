@@ -63,6 +63,26 @@ export class ListEnrollmentsQueryDto extends PaginationDto {
   @IsOptional()
   @IsString()
   userCode?: string;
+
+  @ApiPropertyOptional({ enum: ['student', 'teacher', 'staff', 'visitor'] })
+  @IsOptional()
+  @IsIn(['student', 'teacher', 'staff', 'visitor'])
+  userType?: string;
+
+  @ApiPropertyOptional({ description: 'Restrict to students in this class' })
+  @IsOptional()
+  @IsUUID()
+  classId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  from?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDateString()
+  to?: string;
 }
 
 export class UpdateAliasDto {

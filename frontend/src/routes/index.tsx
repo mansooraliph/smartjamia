@@ -16,6 +16,7 @@ import { StaffPage } from '@/pages/staff/StaffPage';
 import { StaffViewPage } from '@/pages/staff/StaffViewPage';
 import { BiometricDevicesPage } from '@/pages/biometric-devices/BiometricDevicesPage';
 import { BiometricTransactionsPage } from '@/pages/biometric-devices/BiometricTransactionsPage';
+import { BiometricEnrolledPage } from '@/pages/biometric-devices/BiometricEnrolledPage';
 import { AcademicYearsPage } from '@/pages/setup/AcademicYearsPage';
 import { ClassesPage } from '@/pages/setup/ClassesPage';
 import { SubjectsPage } from '@/pages/setup/SubjectsPage';
@@ -220,6 +221,10 @@ export function AppRoutes() {
         <Route path="fees" element={<FeesPage />} />
         <Route path="timetable" element={<TimetablePage />} />
         <Route path="biometric-devices" element={<BiometricDevicesPage />} />
+        <Route
+          path="biometric-devices/enrollments"
+          element={<BiometricEnrolledPage />}
+        />
         <Route
           path="biometric-devices/transactions"
           element={<BiometricTransactionsPage />}

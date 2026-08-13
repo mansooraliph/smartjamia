@@ -22,6 +22,7 @@ import {
   KeyRound,
   ArrowUp,
   ArrowDown,
+  Fingerprint,
 } from 'lucide-react';
 import {
   AcademicYearsApi,
@@ -32,6 +33,8 @@ import {
   Student,
   StudentsApi,
 } from '@/services/school.api';
+import { BiometricDevicesApi, EnrollableUser } from '@/services/biometric-devices.api';
+import { EnrollUserModal } from '@/pages/biometric-devices/modals/EnrollUserModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
 import { Pagination } from '@/components/ui/Pagination';
@@ -96,6 +99,17 @@ const statusTone: Record<Student['status'], 'green' | 'slate' | 'amber' | 'blue'
   inactive: 'slate',
   transferred: 'amber',
   alumni: 'blue',
+};
+
+const BIO_ICON_TONE: Record<'enrolled' | 'pending' | 'none', string> = {
+  enrolled: 'text-green-600',
+  pending: 'text-amber-500',
+  none: 'text-slate-300',
+};
+const BIO_TITLE: Record<'enrolled' | 'pending' | 'none', string> = {
+  enrolled: 'Biometric enrolled',
+  pending: 'Biometric enrollment pending',
+  none: 'Not enrolled — click to quick-enroll',
 };
 
 export function StudentsPage() {
@@ -188,6 +202,12 @@ export function StudentsPage() {
   const [pinModal, setPinModal] = useState<{ open: boolean; student?: Student }>(
     { open: false },
   );
+  const [enrollTarget, setEnrollTarget] = useState<Student | null>(null);
+  const { data: bioDevices = [] } = useQuery({
+    queryKey: ['bio-devices'],
+    queryFn: BiometricDevicesApi.listDevices,
+    enabled: !!enrollTarget,
+  });
 
   const setPin = useMutation({
     mutationFn: (v: { id: string; pin: string }) =>
@@ -440,6 +460,22 @@ export function StudentsPage() {
             header: 'Status',
             render: (s) => <Badge tone={statusTone[s.status]}>{s.status}</Badge>,
           },
+          {
+            key: 'biometric',
+            header: 'Biometric',
+            render: (s) => {
+              const status = s.biometricStatus ?? 'none';
+              return (
+                <button
+                  className={`rounded-md p-1 hover:bg-slate-100 ${BIO_ICON_TONE[status]}`}
+                  onClick={() => setEnrollTarget(s)}
+                  title={BIO_TITLE[status]}
+                >
+                  <Fingerprint className="h-4 w-4" />
+                </button>
+              );
+            },
+          },
         ]}
         actions={
           !canWrite
@@ -534,6 +570,28 @@ export function StudentsPage() {
           pinModal.student && removePin.mutate(pinModal.student.id)
         }
       />
+
+      {enrollTarget && (
+        <EnrollUserModal
+          devices={bioDevices}
+          presetUser={
+            {
+              id: enrollTarget.id,
+              userType: 'student',
+              code: enrollTarget.admissionNumber,
+              userCode: enrollTarget.admissionNumber,
+              name: enrollTarget.studentName,
+              subtitle: enrollTarget.admissionNumber,
+              enrollmentStatus: enrollTarget.biometricStatus ?? 'none',
+            } as EnrollableUser
+          }
+          onClose={() => setEnrollTarget(null)}
+          onSuccess={() => {
+            qc.invalidateQueries({ queryKey: ['students'] });
+            setEnrollTarget(null);
+          }}
+        />
+      )}
 
       <ImportStudentsModal
         open={importOpen}

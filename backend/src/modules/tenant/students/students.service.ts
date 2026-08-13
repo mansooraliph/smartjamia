@@ -13,6 +13,7 @@ import { AcademicYear } from '../../../database/tenant/academic-year.entity';
 import { Parent } from '../../../database/tenant/parent.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
 import { paginate } from '../../../common/dto/pagination.dto';
+import { getBiometricStatusMap } from '../../../common/biometric/biometric-status.util';
 import { CreateStudentDto, UpdateStudentDto } from './dto/student.dto';
 
 export interface StudentListOpts {
@@ -120,7 +121,12 @@ export class StudentsService {
       : [];
     const map = new Map<string, StudentEnrollment>();
     for (const e of enrollments) if (!map.has(e.studentId)) map.set(e.studentId, e);
-    return students.map((s) => ({ ...s, enrollment: map.get(s.id) ?? null }));
+    const bioStatus = await getBiometricStatusMap(em, schoolId, 'studentId', ids);
+    return students.map((s) => ({
+      ...s,
+      enrollment: map.get(s.id) ?? null,
+      biometricStatus: bioStatus.get(s.id) ?? 'none',
+    }));
   }
 
   list(schemaName: string, schoolId: string, opts: StudentListOpts = {}) {

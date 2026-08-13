@@ -12,6 +12,7 @@ import { BiometricTransaction } from '../../../database/tenant/biometric-transac
 import { BiometricEnrollment } from '../../../database/tenant/biometric-enrollment.entity';
 import { Student } from '../../../database/tenant/student.entity';
 import { StudentEnrollment } from '../../../database/tenant/student-enrollment.entity';
+import { ClassEntity } from '../../../database/tenant/class.entity';
 import { Staff } from '../../../database/tenant/staff.entity';
 import { User } from '../../../database/tenant/user.entity';
 import { Visitor } from '../../../database/tenant/visitor.entity';
@@ -30,6 +31,7 @@ import {
   visitorBase,
 } from '../../biometric/user-code.util';
 import { paginate } from '../../../common/dto/pagination.dto';
+import { getBiometricStatusMap } from '../../../common/biometric/biometric-status.util';
 import {
   ListEnrollmentsQueryDto,
   ListTransactionsQueryDto,
@@ -473,20 +475,8 @@ export class BiometricDevicesService {
     schoolId: string,
     fk: 'studentId' | 'staffId' | 'visitorId',
     ids: string[],
-  ): Promise<Map<string, 'enrolled' | 'pending'>> {
-    const map = new Map<string, 'enrolled' | 'pending'>();
-    if (!ids.length) return map;
-    const rows = await em.getRepository(BiometricEnrollment).find({
-      where: { schoolId, [fk]: In(ids) } as any,
-      select: { [fk]: true, status: true } as any,
-    });
-    for (const r of rows) {
-      const id = (r as any)[fk] as string | null;
-      if (!id) continue;
-      if (r.status === 'enrolled') map.set(id, 'enrolled');
-      else if (!map.has(id)) map.set(id, 'pending');
-    }
-    return map;
+  ) {
+    return getBiometricStatusMap(em, schoolId, fk, ids);
   }
 
   /** Search enrollable users of a given type, each resolved to its device PIN. */
@@ -1018,32 +1008,97 @@ export class BiometricDevicesService {
     const page = Math.max(1, q.page ?? 1);
     const limit = Math.min(200, Math.max(1, q.limit ?? 20));
     return this.tenant.runInSchema(schemaName, async (em) => {
-      const where: Record<string, unknown> = { schoolId };
-      if (q.type) where.type = q.type;
-      if (q.userCode) where.userCode = q.userCode;
-      const [items, total] = await em
+      const qb = em
         .getRepository(BiometricEnrollment)
-        .findAndCount({
-          where,
-          order: { createdAt: 'DESC' },
-          skip: (page - 1) * limit,
-          take: limit,
-          // Templates can be large — omit the heavy payload from list responses.
-          select: {
-            id: true,
-            userCode: true,
-            studentId: true,
-            staffId: true,
-            deviceSn: true,
-            type: true,
-            index: true,
-            valid: true,
-            createdAt: true,
-            updatedAt: true,
-          },
-        });
-      return paginate(items, total, page, limit);
+        .createQueryBuilder('e')
+        // Templates can be large — omit the heavy payload from list responses.
+        .select([
+          'e.id',
+          'e.userCode',
+          'e.studentId',
+          'e.staffId',
+          'e.visitorId',
+          'e.userType',
+          'e.name',
+          'e.status',
+          'e.deviceSn',
+          'e.type',
+          'e.index',
+          'e.valid',
+          'e.createdAt',
+          'e.updatedAt',
+        ])
+        .where('e.school_id = :schoolId', { schoolId })
+        .orderBy('e.created_at', 'DESC');
+
+      if (q.type) qb.andWhere('e.type = :type', { type: q.type });
+      if (q.userCode) qb.andWhere('e.user_code = :userCode', { userCode: q.userCode });
+      if (q.userType) qb.andWhere('e.user_type = :userType', { userType: q.userType });
+      if (q.from) qb.andWhere('e.created_at >= :from', { from: q.from });
+      if (q.to) qb.andWhere('e.created_at <= :to', { to: q.to });
+      if (q.search) {
+        const like = `%${q.search.trim()}%`;
+        qb.andWhere('(e.name ILIKE :like OR e.user_code ILIKE :like)', { like });
+      }
+      if (q.classId) {
+        qb.innerJoin(
+          StudentEnrollment,
+          'se',
+          "se.student_id = e.student_id AND se.school_id = e.school_id AND se.status = 'active'",
+        ).andWhere('se.class_id = :classId', { classId: q.classId });
+      }
+
+      const [items, total] = await qb
+        .skip((page - 1) * limit)
+        .take(limit)
+        .getManyAndCount();
+      const display = await this.attachEnrollmentDisplay(em, schoolId, items);
+      return paginate(display, total, page, limit);
     });
+  }
+
+  private async attachEnrollmentDisplay(
+    em: import('typeorm').EntityManager,
+    schoolId: string,
+    rows: BiometricEnrollment[],
+  ) {
+    const studentIds = [
+      ...new Set(rows.map((r) => r.studentId).filter(Boolean) as string[]),
+    ];
+    const sns = [...new Set(rows.map((r) => r.deviceSn).filter(Boolean) as string[])];
+
+    const [enrollments, devices] = await Promise.all([
+      studentIds.length
+        ? em.getRepository(StudentEnrollment).find({
+            where: { schoolId, studentId: In(studentIds), status: 'active' as any },
+          })
+        : [],
+      sns.length
+        ? this.deviceRepo.find({ where: { sn: In(sns), schoolId } })
+        : [],
+    ]);
+    const classIds = [
+      ...new Set(enrollments.map((e) => e.classId).filter(Boolean) as string[]),
+    ];
+    const classes = classIds.length
+      ? await em.getRepository(ClassEntity).find({ where: { id: In(classIds) } })
+      : [];
+    const classNameById = new Map(classes.map((c): [string, string] => [c.id, c.name]));
+    const classByStudent = new Map(
+      enrollments.map((e): [string, string | null] => [
+        e.studentId,
+        e.classId ? (classNameById.get(e.classId) ?? null) : null,
+      ]),
+    );
+    const deviceAlias = new Map(
+      devices.map((d): [string, string] => [d.sn, d.alias || d.sn]),
+    );
+
+    return rows.map((r) => ({
+      ...r,
+      className: r.studentId ? (classByStudent.get(r.studentId) ?? null) : null,
+      deviceAlias: r.deviceSn ? (deviceAlias.get(r.deviceSn) ?? r.deviceSn) : null,
+    }));
   }
 
   async deleteTransaction(schoolId: string, schemaName: string, id: string) {

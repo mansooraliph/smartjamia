@@ -116,6 +116,7 @@ export interface Student {
   status: 'active' | 'inactive' | 'transferred' | 'alumni';
   createdAt: string;
   updatedAt: string;
+  biometricStatus?: 'enrolled' | 'pending' | 'none';
   enrollment?: {
     id: string;
     academicYearId: string;
@@ -158,6 +159,7 @@ export interface Staff {
   status: 'active' | 'on_leave' | 'resigned' | 'terminated';
   createdAt: string;
   updatedAt: string;
+  biometricStatus?: 'enrolled' | 'pending' | 'none';
   user?: User | null;
 }
 
