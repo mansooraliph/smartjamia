@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Search, User, AlertTriangle, Check } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
@@ -72,8 +72,15 @@ export function EnrollUserModal({
     return () => clearTimeout(t);
   }, [search]);
 
-  // Reset the selected user (and class filter) whenever the type changes.
+  // Reset the selected user (and class filter) whenever the type changes —
+  // but NOT on mount, or a presetUser's selection would be wiped immediately
+  // (effects run once after the first render regardless of deps).
+  const skipNextTypeReset = useRef(true);
   useEffect(() => {
+    if (skipNextTypeReset.current) {
+      skipNextTypeReset.current = false;
+      return;
+    }
     setSelected(null);
     setSearch('');
     setClassId('');
