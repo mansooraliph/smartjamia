@@ -14,6 +14,10 @@ export type StudentStatus = 'active' | 'inactive' | 'transferred' | 'alumni';
 @Entity({ name: 'students' })
 @Index(['schoolId'])
 @Index(['schoolId', 'admissionNumber'], { unique: true })
+@Index(['schoolId', 'studentId'], {
+  unique: true,
+  where: '"student_id" IS NOT NULL',
+})
 export class Student {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -23,6 +27,11 @@ export class Student {
 
   @Column({ type: 'varchar', length: 50, name: 'admission_number' })
   admissionNumber: string;
+
+  /** Separate school-issued/legacy ID (e.g. from a prior system) — distinct
+   *  from admissionNumber. Optional; backfilled progressively via import. */
+  @Column({ type: 'varchar', length: 50, name: 'student_id', nullable: true })
+  studentId: string | null;
 
   @Column({ type: 'uuid', name: 'user_id', nullable: true })
   userId: string | null;

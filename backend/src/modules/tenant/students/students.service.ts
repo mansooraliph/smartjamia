@@ -84,7 +84,7 @@ export class StudentsService {
     if (opts.search) {
       const term = `%${opts.search.trim()}%`;
       qb.andWhere(
-        '(s.studentName ILIKE :term OR s.admissionNumber ILIKE :term)',
+        '(s.studentName ILIKE :term OR s.admissionNumber ILIKE :term OR s.studentId ILIKE :term)',
         { term },
       );
     }
@@ -171,6 +171,7 @@ export class StudentsService {
       const sMap = new Map(sections.map((s) => [s.id, s.name]));
       return withEnrol.map((s) => ({
         admissionNumber: s.admissionNumber,
+        studentId: s.studentId ?? '',
         studentName: s.studentName,
         gender: s.gender,
         dateOfBirth: s.dateOfBirth,
@@ -212,6 +213,7 @@ export class StudentsService {
         .select([
           's.id',
           's.admissionNumber',
+          's.studentId',
           's.studentName',
           's.status',
         ])
@@ -221,7 +223,7 @@ export class StudentsService {
       if (opts.search) {
         const term = `%${opts.search.trim()}%`;
         qb.andWhere(
-          '(s.studentName ILIKE :term OR s.admissionNumber ILIKE :term)',
+          '(s.studentName ILIKE :term OR s.admissionNumber ILIKE :term OR s.studentId ILIKE :term)',
           { term },
         );
       }
@@ -255,11 +257,18 @@ export class StudentsService {
       if (dup) {
         throw new ConflictException('Admission number already exists');
       }
+      if (dto.studentId) {
+        const dupSid = await studentRepo.findOne({
+          where: { schoolId, studentId: dto.studentId },
+        });
+        if (dupSid) throw new ConflictException('Student ID already exists');
+      }
 
       const student = await studentRepo.save(
         studentRepo.create({
           schoolId,
           admissionNumber: dto.admissionNumber,
+          studentId: dto.studentId ?? null,
           studentName: dto.studentName,
           dateOfBirth: new Date(dto.dateOfBirth),
           gender: dto.gender,
@@ -347,11 +356,18 @@ export class StudentsService {
         });
         if (dup) throw new ConflictException('Admission number already exists');
       }
+      if (dto.studentId && dto.studentId !== s.studentId) {
+        const dupSid = await repo.findOne({
+          where: { schoolId, studentId: dto.studentId },
+        });
+        if (dupSid) throw new ConflictException('Student ID already exists');
+      }
 
       // Whitelist profile columns — never blindly spread enrollment-only keys
       // (academicYearId/classId/sectionId/rollNumber) onto the Student entity.
       const profileKeys = [
         'admissionNumber',
+        'studentId',
         'studentName',
         'gender',
         'bloodGroup',

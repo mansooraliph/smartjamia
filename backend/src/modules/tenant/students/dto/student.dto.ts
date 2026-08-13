@@ -98,6 +98,15 @@ export class CreateStudentDto {
   @Length(1, 50)
   admissionNumber: string;
 
+  @ApiPropertyOptional({
+    example: 'STU00123',
+    description: 'Separate school-issued ID, distinct from admission number',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(1, 50)
+  studentId?: string;
+
   @ApiProperty({ example: 'Aisha Khan' })
   @IsString()
   @Length(1, 100)

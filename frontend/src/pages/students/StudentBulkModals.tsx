@@ -317,7 +317,9 @@ export function ImportStudentsModal({
                 Match each field to a column from your file.{' '}
                 <span className="text-red-500">*</span> required. Leave a field
                 as <em>“Ignore”</em> to skip it. If a mapped Admission Number
-                cell is blank, one is auto-generated (ADM…).
+                cell is blank, one is auto-generated (ADM…). A row whose Name +
+                Class matches an existing student updates only that student's
+                Student ID — no new student is created.
               </p>
             </div>
             <div className="grid max-h-72 grid-cols-1 gap-x-6 gap-y-2 overflow-auto px-3 py-3 sm:grid-cols-2">
@@ -388,6 +390,11 @@ export function ImportStudentsModal({
                   {dupMode === 'skip' ? ' (skipped)' : ' (importing)'}
                 </span>
               )}
+              {!!preview.summary.updates && (
+                <span className="text-blue-600">
+                  {preview.summary.updates} matched (Student ID update only)
+                </span>
+              )}
             </div>
             {flaggedRows.length > 0 && (
               <div className="max-h-56 overflow-auto">
@@ -429,6 +436,10 @@ export function ImportStudentsModal({
           <div className="rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
             Imported {result.created} student
             {result.created === 1 ? '' : 's'}.
+            {!!result.updated &&
+              ` Updated Student ID for ${result.updated} existing student${
+                result.updated === 1 ? '' : 's'
+              }.`}
             {result.skipped > 0 && ` Skipped ${result.skipped} invalid row(s).`}
           </div>
         )}

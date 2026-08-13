@@ -12,6 +12,7 @@ const GENDERS = new Set(['male', 'female', 'other']);
 // Canonical column → accepted header aliases (lower-cased, spaces/underscores stripped).
 const HEADER_ALIASES: Record<string, string[]> = {
   admissionNumber: ['admissionnumber', 'admissionno', 'admno', 'admission'],
+  studentId: ['studentid', 'sid', 'stuid', 'oldstudentid', 'legacyid'],
   studentName: ['studentname', 'name', 'fullname', 'firstname', 'first'],
   dateOfBirth: ['dateofbirth', 'dob', 'birthdate'],
   gender: ['gender', 'sex'],
@@ -37,8 +38,12 @@ const HEADER_ALIASES: Record<string, string[]> = {
 // Canonical DB fields the importer can fill, with a human label and whether a
 // value is mandatory. Order drives the mapping UI. `admissionNumber` is optional
 // — when its cell is blank the importer auto-generates ADMYYYYNNN.
+// `studentId` is a separate, optional, unique ID. A row whose Name + Class
+// matches an already-enrolled student updates ONLY that student's Student ID
+// instead of creating a new record (see `validate()`'s match-by-name+class).
 export const IMPORT_FIELDS: ImportField[] = [
   { key: 'admissionNumber', label: 'Admission Number', required: false },
+  { key: 'studentId', label: 'Student ID', required: false },
   { key: 'studentName', label: 'Student Name', required: true },
   { key: 'dateOfBirth', label: 'Date of Birth', required: true },
   { key: 'gender', label: 'Gender', required: true },
@@ -66,6 +71,7 @@ export const IMPORT_FIELDS: ImportField[] = [
 // skippable per-row error. Keep in sync with the entity @Column lengths.
 const FIELD_MAX_LENGTH: Record<string, number> = {
   admissionNumber: 50,
+  studentId: 50,
   studentName: 100,
   bloodGroup: 5,
   religion: 50,
@@ -147,6 +153,10 @@ export interface ImportRowResult {
   willImport: boolean; // false when errors, or a duplicate under 'skip' mode
   duplicate: boolean; // same name + DOB as an existing/earlier student
   autoAdmissionNumber: boolean;
+  /** Row matched an existing enrolled student by Name+Class — only that
+   *  student's Student ID will be updated; no new student is created. */
+  willUpdate: boolean;
+  matchedStudentId: string | null;
 }
 
 export interface ImportPreview {
@@ -156,6 +166,7 @@ export interface ImportPreview {
     valid: number; // rows that will import
     invalid: number; // rows with blocking errors
     duplicates: number; // rows flagged as duplicates
+    updates: number; // rows matched to an existing student (Student ID backfill)
   };
 }
 
@@ -170,6 +181,7 @@ export class StudentImportService {
     const ws = wb.addWorksheet('Students');
     const headers = [
       'admissionNumber',
+      'studentId',
       'studentName',
       'dateOfBirth',
       'gender',
@@ -195,6 +207,7 @@ export class StudentImportService {
     ws.getRow(1).font = { bold: true };
     ws.addRow({
       admissionNumber: '(leave blank to auto-generate)',
+      studentId: '(optional; re-import with Name+Class to backfill)',
       studentName: 'Aisha Khan',
       dateOfBirth: '2016-05-12',
       gender: 'female',
@@ -296,6 +309,7 @@ export class StudentImportService {
       const sectionMap = await this.sectionMap(em, schoolId);
 
       let created = 0;
+      let updated = 0;
       const errors: { rowNumber: number; error: string }[] = [];
 
       for (const row of preview.rows) {
@@ -306,6 +320,18 @@ export class StudentImportService {
           continue;
         }
         const d = row.data;
+
+        // Re-import mode: row matched an existing enrolled student by
+        // Name+Class — update ONLY that student's Student ID, nothing else.
+        if (row.willUpdate && row.matchedStudentId) {
+          await studentRepo.update(
+            { id: row.matchedStudentId },
+            { studentId: d.studentId },
+          );
+          updated++;
+          continue;
+        }
+
         const admissionNumber = d.admissionNumber
           ? d.admissionNumber
           : `${prefix}${String(nextSeq++).padStart(3, '0')}`;
@@ -314,6 +340,7 @@ export class StudentImportService {
           studentRepo.create({
             schoolId,
             admissionNumber,
+            studentId: d.studentId || null,
             studentName: d.studentName,
             dateOfBirth: new Date(d.dateOfBirth),
             gender: d.gender as any,
@@ -371,7 +398,8 @@ export class StudentImportService {
       }
       return {
         created,
-        skipped: preview.rows.length - created,
+        updated,
+        skipped: preview.rows.length - created - updated,
         errors,
       };
     });
@@ -497,7 +525,13 @@ export class StudentImportService {
     const existing = await em.getRepository(Student).find({
       where: { schoolId },
       withDeleted: true,
-      select: { admissionNumber: true, studentName: true, dateOfBirth: true },
+      select: {
+        id: true,
+        admissionNumber: true,
+        studentId: true,
+        studentName: true,
+        dateOfBirth: true,
+      },
     });
     const existingAdm = new Set(existing.map((s) => s.admissionNumber));
     // Identity key for duplicate detection: normalized name + date of birth.
@@ -506,12 +540,44 @@ export class StudentImportService {
         .filter((s) => s.studentName)
         .map((s) => nameDobKey(s.studentName, s.dateOfBirth)),
     );
+    // Existing Student ID → owning student's row id (to exclude a match's own
+    // current value from the duplicate check on re-import).
+    const studentIdOwner = new Map(
+      existing.filter((s) => s.studentId).map((s) => [s.studentId as string, s.id]),
+    );
     const seenInFile = new Set<string>();
     const seenNameDob = new Set<string>();
+    const seenStudentIdInFile = new Set<string>();
     const labelByKey = new Map(IMPORT_FIELDS.map((f) => [f.key, f.label]));
 
     const classMap = await this.classMap(em, schoolId, academicYearId);
     const sectionMap = await this.sectionMap(em, schoolId);
+
+    // Name+Class → student id, built from every student's CURRENT active
+    // enrollment (any year) — supports the "re-import to backfill Student ID"
+    // flow: a row whose Name+Class matches an already-enrolled student
+    // updates that student's Student ID instead of creating a new record.
+    const studentById = new Map(existing.map((s) => [s.id, s]));
+    const allClasses = await em
+      .getRepository(ClassEntity)
+      .find({ where: { schoolId } });
+    const classNameById = new Map(
+      allClasses.map((c) => [c.id, c.name.toLowerCase()]),
+    );
+    const activeEnrollments = await em.getRepository(StudentEnrollment).find({
+      where: { schoolId, status: 'active' as any },
+      select: { studentId: true, classId: true },
+    });
+    const nameClassMatch = new Map<string, string>(); // "name|class" → student id
+    for (const e of activeEnrollments) {
+      const className = classNameById.get(e.classId);
+      const stu = studentById.get(e.studentId);
+      if (!className || !stu?.studentName) continue;
+      nameClassMatch.set(
+        `${stu.studentName.trim().toLowerCase()}|${className}`,
+        e.studentId,
+      );
+    }
 
     // A class picked in the import modal enrolls every row into it, overriding
     // any class/section columns in the file. Validate the selection up front —
@@ -546,18 +612,42 @@ export class StudentImportService {
 
       if (!d.studentName) errors.push('Student name is required');
 
+      // Re-import match: Name + Class + a Student ID value, matched against
+      // an existing student's CURRENT active enrollment. Matched rows only
+      // update that student's Student ID — DOB/gender/enrollment aren't
+      // required for them.
+      let willUpdate = false;
+      let matchedStudentId: string | null = null;
+      if (d.studentName && d.className && d.studentId) {
+        const key = `${d.studentName.trim().toLowerCase()}|${d.className.trim().toLowerCase()}`;
+        const match = nameClassMatch.get(key);
+        if (match) {
+          willUpdate = true;
+          matchedStudentId = match;
+          warnings.push(
+            `Matched existing student in "${d.className}" — will update Student ID only`,
+          );
+        }
+      }
+
       const dobIso = d.dateOfBirth ? this.toIsoDate(d.dateOfBirth) : null;
-      if (!d.dateOfBirth) errors.push('Date of birth is required');
-      else if (!dobIso) errors.push('Date of birth is not a valid date');
+      if (!d.dateOfBirth) {
+        if (!willUpdate) errors.push('Date of birth is required');
+      } else if (!dobIso) {
+        errors.push('Date of birth is not a valid date');
+      }
 
       if (d.admissionDate && !this.toIsoDate(d.admissionDate))
         errors.push('Admission date is not a valid date');
 
       const gender = (d.gender || '').toLowerCase();
-      if (!gender) errors.push('Gender is required');
-      else if (!GENDERS.has(gender))
+      if (!gender) {
+        if (!willUpdate) errors.push('Gender is required');
+      } else if (!GENDERS.has(gender)) {
         errors.push('Gender must be male, female or other');
-      else d.gender = gender;
+      } else {
+        d.gender = gender;
+      }
 
       // Normalize phone-like fields so formatting can't overflow the column.
       if (d.mobile) d.mobile = normalizePhone(d.mobile);
@@ -582,6 +672,15 @@ export class StudentImportService {
         seenInFile.add(d.admissionNumber);
       }
 
+      if (d.studentId) {
+        const owner = studentIdOwner.get(d.studentId);
+        if (owner && owner !== matchedStudentId)
+          errors.push('Student ID already exists');
+        if (seenStudentIdInFile.has(d.studentId))
+          errors.push('Duplicate Student ID in file');
+        seenStudentIdInFile.add(d.studentId);
+      }
+
       // Duplicate-by-identity check (only meaningful once name + DOB are valid).
       let duplicate = false;
       if (d.studentName && dobIso) {
@@ -602,9 +701,12 @@ export class StudentImportService {
 
       // Enrollment: a class chosen in the modal enrolls every valid row into
       // it (file class/section columns are ignored). Otherwise fall back to the
-      // file's own class/section columns.
+      // file's own class/section columns. Matched (willUpdate) rows are
+      // already enrolled — no new enrollment is needed for them.
       let willEnroll = false;
-      if (overrideClassId) {
+      if (willUpdate) {
+        // no-op — already enrolled in the matched class
+      } else if (overrideClassId) {
         willEnroll = true;
       } else if (d.className || d.sectionName) {
         if (!academicYearId) {
@@ -631,7 +733,8 @@ export class StudentImportService {
       }
 
       const willImport =
-        errors.length === 0 && !(duplicate && duplicateMode === 'skip');
+        errors.length === 0 &&
+        (willUpdate || !(duplicate && duplicateMode === 'skip'));
 
       return {
         rowNumber,
@@ -642,15 +745,18 @@ export class StudentImportService {
         willImport,
         duplicate,
         autoAdmissionNumber,
+        willUpdate,
+        matchedStudentId,
       };
     });
 
     const invalid = rows.filter((r) => r.errors.length).length;
     const valid = rows.filter((r) => r.willImport).length;
     const duplicates = rows.filter((r) => r.duplicate).length;
+    const updates = rows.filter((r) => r.willUpdate && r.willImport).length;
     return {
       rows,
-      summary: { total: rows.length, valid, invalid, duplicates },
+      summary: { total: rows.length, valid, invalid, duplicates, updates },
     };
   }
 

@@ -95,6 +95,8 @@ export interface Student {
   schoolId: string;
   userId?: string | null; // set when portal (PIN) access is enabled
   admissionNumber: string;
+  /** Separate school-issued/legacy ID, distinct from admissionNumber. */
+  studentId: string | null;
   studentName: string;
   dateOfBirth: string;
   gender: 'male' | 'female' | 'other';
@@ -900,6 +902,10 @@ export interface ImportRowResult {
   willImport: boolean;
   duplicate: boolean;
   autoAdmissionNumber: boolean;
+  /** Students only: row matched an existing enrolled student by Name+Class —
+   *  only that student's Student ID is updated; no new student is created. */
+  willUpdate?: boolean;
+  matchedStudentId?: string | null;
 }
 export interface ImportPreview {
   rows: ImportRowResult[];
@@ -908,10 +914,12 @@ export interface ImportPreview {
     valid: number;
     invalid: number;
     duplicates: number;
+    updates?: number;
   };
 }
 export interface ImportCommitResult {
   created: number;
+  updated?: number;
   skipped: number;
   errors: { rowNumber: number; error: string }[];
 }

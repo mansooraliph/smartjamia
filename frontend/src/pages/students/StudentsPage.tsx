@@ -320,7 +320,7 @@ export function StudentsPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <input
             type="search"
-            placeholder="Search by name or admission #"
+            placeholder="Search by name, admission # or student ID"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full rounded-md border border-slate-200 py-1.5 pl-9 pr-3 text-sm"
@@ -409,6 +409,18 @@ export function StudentsPage() {
                 {s.admissionNumber}
               </code>
             ),
+          },
+          {
+            key: 'studentId',
+            header: 'Student ID',
+            render: (s) =>
+              s.studentId ? (
+                <code className="text-xs font-medium text-slate-700">
+                  {s.studentId}
+                </code>
+              ) : (
+                <span className="text-slate-300">—</span>
+              ),
           },
           {
             key: 'name',

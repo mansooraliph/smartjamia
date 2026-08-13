@@ -65,6 +65,7 @@ const parentSchema = z
 const schema = z
   .object({
     admissionNumber: z.string().min(1, 'Required'),
+    studentId: z.string().optional().or(z.literal('')),
     studentName: z.string().min(1, 'Required').max(100),
     dateOfBirth: z.string().min(1, 'Required'),
     gender: z.enum(GENDERS),
@@ -192,6 +193,7 @@ export function StudentRegistrationPage() {
     resolver: zodResolver(schema),
     defaultValues: {
       admissionNumber: '',
+      studentId: '',
       studentName: '',
       dateOfBirth: '',
       gender: 'male',
@@ -233,6 +235,7 @@ export function StudentRegistrationPage() {
       originalParentIds.current = ps.map((p) => p.id);
       reset({
         admissionNumber: student.admissionNumber,
+        studentId: student.studentId ?? '',
         studentName: student.studentName,
         dateOfBirth: student.dateOfBirth?.slice(0, 10) ?? '',
         gender: student.gender,
@@ -336,6 +339,7 @@ export function StudentRegistrationPage() {
     mutationFn: async (v: FormValues) => {
       const studentPayload: Record<string, unknown> = {
         admissionNumber: v.admissionNumber,
+        studentId: v.studentId || undefined,
         studentName: v.studentName,
         dateOfBirth: v.dateOfBirth,
         gender: v.gender,
@@ -441,6 +445,13 @@ export function StudentRegistrationPage() {
               error={errors.admissionNumber?.message}
             >
               <Input {...register('admissionNumber')} placeholder="ADM2026001" />
+            </Field>
+            <Field
+              label="Student ID"
+              error={errors.studentId?.message}
+              hint="Optional separate ID (e.g. from a prior system)"
+            >
+              <Input {...register('studentId')} placeholder="STU00123" />
             </Field>
             <Field label="Student name" required error={errors.studentName?.message}>
               <Input {...register('studentName')} />
