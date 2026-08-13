@@ -695,6 +695,9 @@ export class IclockService {
   ): Promise<void> {
     const repo = em.getRepository(BiometricEnrollment);
     const index = data.index ?? '0';
+    // Reaching here means the device pushed back an actual template/photo —
+    // proof the capture succeeded — so flip 'pending' → 'enrolled'.
+    data = { ...data, status: 'enrolled' };
     const existing = await repo.findOne({
       where: { schoolId, userCode: data.userCode, type: data.type, index },
     });
