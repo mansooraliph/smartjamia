@@ -109,6 +109,18 @@ export function EnrollUserModal({
     [devices],
   );
 
+  // Auto-pick the only device once its list loads, so a single-device school
+  // doesn't need a manual tick. Only runs once — later manual deselection is
+  // never overridden — and never fires if devices were already preset.
+  const autoPickedDevice = useRef(!!presetDeviceIds?.length);
+  useEffect(() => {
+    if (autoPickedDevice.current) return;
+    if (enrollable.length === 1) {
+      setDeviceIds(new Set([enrollable[0].id]));
+      autoPickedDevice.current = true;
+    }
+  }, [enrollable]);
+
   const toggleDevice = (id: string) =>
     setDeviceIds((prev) => {
       const next = new Set(prev);
