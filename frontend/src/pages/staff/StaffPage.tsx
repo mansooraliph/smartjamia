@@ -13,6 +13,7 @@ import { Plus, Pencil, Trash2, Search, Upload, Fingerprint } from 'lucide-react'
 import { ExportFormat, RbacApi, Staff, StaffApi } from '@/services/school.api';
 import { BiometricDevicesApi, EnrollableUser } from '@/services/biometric-devices.api';
 import { EnrollUserModal } from '@/pages/biometric-devices/modals/EnrollUserModal';
+import { BiometricDetailsModal } from '@/pages/biometric-devices/modals/BiometricDetailsModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
 import { Pagination } from '@/components/ui/Pagination';
@@ -82,6 +83,10 @@ const BIO_TITLE: Record<'enrolled' | 'pending' | 'none', string> = {
   none: 'Not enrolled — click to quick-enroll',
 };
 
+function staffBioUserType(s: Staff): 'teacher' | 'staff' {
+  return (s.user?.roleKey || s.user?.role) === 'teacher' ? 'teacher' : 'staff';
+}
+
 export function StaffPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -97,6 +102,7 @@ export function StaffPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [enrollTarget, setEnrollTarget] = useState<Staff | null>(null);
+  const [bioDetailsTarget, setBioDetailsTarget] = useState<Staff | null>(null);
   const { data: bioDevices = [] } = useQuery({
     queryKey: ['bio-devices'],
     queryFn: BiometricDevicesApi.listDevices,
@@ -272,7 +278,9 @@ export function StaffPage() {
               return (
                 <button
                   className={`rounded-md p-1 hover:bg-slate-100 ${BIO_ICON_TONE[status]}`}
-                  onClick={() => setEnrollTarget(s)}
+                  onClick={() =>
+                    status === 'none' ? setEnrollTarget(s) : setBioDetailsTarget(s)
+                  }
                   title={BIO_TITLE[status]}
                 >
                   <Fingerprint className="h-4 w-4" />
@@ -312,17 +320,26 @@ export function StaffPage() {
         />
       )}
 
+      {bioDetailsTarget && (
+        <BiometricDetailsModal
+          userId={bioDetailsTarget.id}
+          userType={staffBioUserType(bioDetailsTarget)}
+          name={bioDetailsTarget.user?.name ?? bioDetailsTarget.employeeId}
+          onClose={() => setBioDetailsTarget(null)}
+          onEnrollMore={() => {
+            setEnrollTarget(bioDetailsTarget);
+            setBioDetailsTarget(null);
+          }}
+        />
+      )}
+
       {enrollTarget && (
         <EnrollUserModal
           devices={bioDevices}
           presetUser={
             {
               id: enrollTarget.id,
-              userType:
-                (enrollTarget.user?.roleKey || enrollTarget.user?.role) ===
-                'teacher'
-                  ? 'teacher'
-                  : 'staff',
+              userType: staffBioUserType(enrollTarget),
               code: enrollTarget.employeeId,
               userCode: enrollTarget.employeeId,
               name: enrollTarget.user?.name ?? enrollTarget.employeeId,

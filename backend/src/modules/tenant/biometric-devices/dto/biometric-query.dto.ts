@@ -74,6 +74,16 @@ export class ListEnrollmentsQueryDto extends PaginationDto {
   @IsUUID()
   classId?: string;
 
+  @ApiPropertyOptional({ description: 'All enrollment rows for one student' })
+  @IsOptional()
+  @IsUUID()
+  studentId?: string;
+
+  @ApiPropertyOptional({ description: 'All enrollment rows for one staff/teacher' })
+  @IsOptional()
+  @IsUUID()
+  staffId?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsDateString()

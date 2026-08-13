@@ -35,6 +35,7 @@ import {
 } from '@/services/school.api';
 import { BiometricDevicesApi, EnrollableUser } from '@/services/biometric-devices.api';
 import { EnrollUserModal } from '@/pages/biometric-devices/modals/EnrollUserModal';
+import { BiometricDetailsModal } from '@/pages/biometric-devices/modals/BiometricDetailsModal';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
 import { Pagination } from '@/components/ui/Pagination';
@@ -203,6 +204,7 @@ export function StudentsPage() {
     { open: false },
   );
   const [enrollTarget, setEnrollTarget] = useState<Student | null>(null);
+  const [bioDetailsTarget, setBioDetailsTarget] = useState<Student | null>(null);
   const { data: bioDevices = [] } = useQuery({
     queryKey: ['bio-devices'],
     queryFn: BiometricDevicesApi.listDevices,
@@ -480,7 +482,9 @@ export function StudentsPage() {
               return (
                 <button
                   className={`rounded-md p-1 hover:bg-slate-100 ${BIO_ICON_TONE[status]}`}
-                  onClick={() => setEnrollTarget(s)}
+                  onClick={() =>
+                    status === 'none' ? setEnrollTarget(s) : setBioDetailsTarget(s)
+                  }
                   title={BIO_TITLE[status]}
                 >
                   <Fingerprint className="h-4 w-4" />
@@ -582,6 +586,19 @@ export function StudentsPage() {
           pinModal.student && removePin.mutate(pinModal.student.id)
         }
       />
+
+      {bioDetailsTarget && (
+        <BiometricDetailsModal
+          userId={bioDetailsTarget.id}
+          userType="student"
+          name={bioDetailsTarget.studentName}
+          onClose={() => setBioDetailsTarget(null)}
+          onEnrollMore={() => {
+            setEnrollTarget(bioDetailsTarget);
+            setBioDetailsTarget(null);
+          }}
+        />
+      )}
 
       {enrollTarget && (
         <EnrollUserModal

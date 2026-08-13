@@ -1055,6 +1055,9 @@ export class BiometricDevicesService {
       if (q.type) qb.andWhere('e.type = :type', { type: q.type });
       if (q.userCode) qb.andWhere('e.user_code = :userCode', { userCode: q.userCode });
       if (q.userType) qb.andWhere('e.user_type = :userType', { userType: q.userType });
+      if (q.studentId)
+        qb.andWhere('e.student_id = :studentId', { studentId: q.studentId });
+      if (q.staffId) qb.andWhere('e.staff_id = :staffId', { staffId: q.staffId });
       if (q.from) qb.andWhere('e.created_at >= :from', { from: q.from });
       if (q.to) qb.andWhere('e.created_at <= :to', { to: q.to });
       if (q.search) {

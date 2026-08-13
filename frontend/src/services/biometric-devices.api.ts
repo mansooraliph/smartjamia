@@ -120,6 +120,8 @@ export interface ListEnrollmentsParams {
   search?: string;
   userType?: EnrollUserType;
   classId?: string;
+  studentId?: string;
+  staffId?: string;
   type?: string;
   from?: string;
   to?: string;
