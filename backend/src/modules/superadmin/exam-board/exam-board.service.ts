@@ -169,7 +169,9 @@ export class ExamBoardService {
   ) {
     const course = await this.getOrgCourse(organizationId, id);
     Object.assign(course, dto);
-    return this.courseRepo.save(course);
+    const saved = await this.courseRepo.save(course);
+    await this.syncInstitutionsForCourse(organizationId, id);
+    return saved;
   }
 
   async removeCourse(organizationId: string, id: string) {
