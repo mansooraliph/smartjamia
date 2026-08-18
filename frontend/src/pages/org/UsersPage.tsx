@@ -13,8 +13,9 @@ import { Modal } from '@/components/ui/Modal';
 import { Field, Input, Select } from '@/components/ui/Input';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { toast } from '@/stores/toast.store';
+import { roleLabel } from '@/lib/access';
 
-const ROLES = ['owner', 'admin', 'manager', 'teacher', 'staff', 'cashier'];
+const ROLES = ['owner', 'admin', 'manager', 'teacher', 'staff', 'cashier', 'student', 'parent'];
 
 function errMsg(e: unknown): string | undefined {
   const anyE = e as any;
@@ -71,7 +72,7 @@ export function UsersPage() {
         </Select>
         <Select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)} className="max-w-[160px]">
           <option value="">All roles</option>
-          {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
         </Select>
         <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[160px]">
           <option value="">All statuses</option>
@@ -105,7 +106,7 @@ export function UsersPage() {
           { key: 'schools', header: 'Schools & roles', render: (u) => (
             <div className="flex flex-wrap gap-1">
               {u.grants.filter((g) => g.status === 'active').map((g) => (
-                <Badge key={g.id} tone="indigo">{g.schoolName} · {g.role}</Badge>
+                <Badge key={g.id} tone="indigo">{g.schoolName} · {roleLabel(g.role)}</Badge>
               ))}
             </div>
           ) },
@@ -245,7 +246,7 @@ function CreateUserModal({
                   {schools.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </Select>
                 <Select {...register(`grants.${i}.role` as const)} className="w-32">
-                  {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                  {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                 </Select>
                 {fields.length > 1 && (
                   <button type="button" className="p-1.5 text-slate-400 hover:text-red-600" onClick={() => remove(i)}>
@@ -360,7 +361,7 @@ function ManageAccessModal({
           </Field>
           <Field label="Role">
             <Select value={role} onChange={(e) => setRole(e.target.value)} className="w-32">
-              {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+              {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
             </Select>
           </Field>
           <button
@@ -384,7 +385,7 @@ function ManageAccessModal({
             {active.map((g) => (
               <tr key={g.id} className="border-t border-slate-100">
                 <td className="py-2">{g.schoolName}</td>
-                <td className="py-2"><Badge tone="blue">{g.role}</Badge></td>
+                <td className="py-2"><Badge tone="blue">{roleLabel(g.role)}</Badge></td>
                 <td className="py-2 text-right">
                   <button
                     className="rounded-md p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"

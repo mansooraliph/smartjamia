@@ -87,7 +87,7 @@ const listFor = (keys: string[]): string[] => keys.map((k) => perm(k, 'list'));
 export const SYSTEM_ROLES: RoleDef[] = [
   { key: 'owner', name: 'Owner', isSystem: true, description: 'Full access — the school account owner.', permissions: [...ALL_PERMISSIONS] },
   { key: 'admin', name: 'Admin', isSystem: true, description: 'Full administrative access.', permissions: [...ALL_PERMISSIONS] },
-  { key: 'manager', name: 'Manager', isSystem: true, description: 'Full management access.', permissions: [...ALL_PERMISSIONS] },
+  { key: 'manager', name: 'Principal', isSystem: true, description: 'Full management access.', permissions: [...ALL_PERMISSIONS] },
   {
     key: 'teacher',
     name: 'Teacher',

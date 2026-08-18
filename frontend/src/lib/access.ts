@@ -8,6 +8,23 @@ export function isAdminRole(role?: string): boolean {
   return !!role && ADMIN_ROLES.includes(role);
 }
 
+/** Display labels for built-in role keys — key values stay stable in the DB/API. */
+export const ROLE_LABELS: Record<string, string> = {
+  owner: 'Owner',
+  admin: 'Admin',
+  manager: 'Principal',
+  teacher: 'Teacher',
+  staff: 'Staff',
+  cashier: 'Cashier',
+  student: 'Student',
+  parent: 'Parent',
+};
+
+export function roleLabel(role?: string | null): string {
+  if (!role) return '—';
+  return ROLE_LABELS[role] ?? role.charAt(0).toUpperCase() + role.slice(1);
+}
+
 export type PermAction = 'list' | 'create' | 'delete';
 
 /** Permission-gated module path-prefixes (mirror of backend PERMISSION_MODULES keys). */

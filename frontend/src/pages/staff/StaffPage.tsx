@@ -25,6 +25,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select, Textarea } from '@/components/ui/Input';
 import { COUNTRY_CODES, DEFAULT_COUNTRY_CODE } from '@/lib/phone';
 import { formatDate, formatMoney, paiseToRupees, rupeesToPaise } from '@/lib/format';
+import { roleLabel } from '@/lib/access';
 
 const ROLES = ['admin', 'manager', 'teacher', 'staff', 'cashier'] as const;
 const BUILTIN_ROLES = new Set<string>([...ROLES, 'owner']);
@@ -238,7 +239,7 @@ export function StaffPage() {
                       : roleTone[s.user?.role ?? 'staff'] ?? 'slate'
                   }
                 >
-                  {effective ?? '—'}
+                  {s.user?.roleKey ? effective : roleLabel(effective)}
                 </Badge>
               );
             },
@@ -531,8 +532,8 @@ function StaffFormModal({
           <Select {...register('role')}>
             <optgroup label="Built-in">
               {ROLES.map((r) => (
-                <option key={r} value={r} className="capitalize">
-                  {r}
+                <option key={r} value={r}>
+                  {roleLabel(r)}
                 </option>
               ))}
             </optgroup>

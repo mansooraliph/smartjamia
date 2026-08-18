@@ -24,6 +24,7 @@ import { Pagination } from '@/components/ui/Pagination';
 import { Field, Input, Select, Textarea, Checkbox } from '@/components/ui/Input';
 import { formatDate } from '@/lib/format';
 import { toast } from '@/stores/toast.store';
+import { roleLabel } from '@/lib/access';
 
 const GRANT_ROLES = ['owner', 'admin', 'manager', 'teacher', 'staff', 'cashier'] as const;
 
@@ -355,7 +356,7 @@ function AccessTab({ schoolId }: { schoolId: string }) {
           className="max-w-[160px]"
         >
           <option value="">All roles</option>
-          {GRANT_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+          {GRANT_ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
         </Select>
         <button className="btn-primary" onClick={() => setAddOpen(true)}>
           <Plus className="mr-1.5 h-4 w-4" /> Add user
@@ -374,7 +375,7 @@ function AccessTab({ schoolId }: { schoolId: string }) {
               <div className="text-xs text-slate-500">{g.userAccount?.email}</div>
             </div>
           ) },
-          { key: 'role', header: 'Role', render: (g) => <Badge tone="blue">{g.role}</Badge> },
+          { key: 'role', header: 'Role', render: (g) => <Badge tone="blue">{roleLabel(g.role)}</Badge> },
         ]}
         actions={(g) => (
           <button
@@ -462,7 +463,7 @@ function AddUserModal({
         <Field label="Role" error={errors.role?.message}>
           <Select {...register('role')}>
             {GRANT_ROLES.map((r) => (
-              <option key={r} value={r}>{r}</option>
+              <option key={r} value={r}>{roleLabel(r)}</option>
             ))}
           </Select>
         </Field>
