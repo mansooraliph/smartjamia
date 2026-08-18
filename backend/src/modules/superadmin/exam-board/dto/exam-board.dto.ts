@@ -304,6 +304,13 @@ export class SetInstitutionEnablementDto {
   isEnabled: boolean;
 }
 
+export class ImportInstitutionCoursesDto {
+  @ApiProperty({ type: [String], description: "Ids of the institution's local courses to copy into the Exam Board course master" })
+  @IsArray()
+  @IsUUID('4', { each: true })
+  courseIds: string[];
+}
+
 export class CreateExamBoardBatchDto {
   @ApiProperty({ description: 'Institution (college) this batch belongs to' })
   @IsUUID()

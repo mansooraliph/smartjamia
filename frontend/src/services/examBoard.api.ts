@@ -40,6 +40,16 @@ export interface ExamBoardAcademicYear {
   createdAt: string;
 }
 
+export interface ExamBoardLocalCourseCandidate {
+  id: string;
+  name: string;
+  code: string | null;
+  level: ExamBoardCourseLevel;
+  termSystem: ExamBoardTermSystem;
+  durationYears: number;
+  alreadyInMaster: boolean;
+}
+
 export interface ExamBoardInstitution {
   school: {
     id: string;

@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, EntityManager, ILike, In, Repository } from 'typeorm';
+import { DataSource, EntityManager, ILike, In, IsNull, Repository } from 'typeorm';
 import { paginate } from '../../../common/dto/pagination.dto';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
 import { School } from '../../../database/master/school.entity';
@@ -194,6 +194,96 @@ export class ExamBoardService {
       throw new ForbiddenException('Course is not in your organization');
     }
     return course;
+  }
+
+  /**
+   * List an institution's own locally-created courses (not already mirrored
+   * from the org master) so the org admin can copy them into the Exam Board
+   * course catalog instead of re-typing them. Deduplicated by name, since a
+   * course repeats once per academic year in the tenant schema.
+   */
+  async listInstitutionLocalCourses(organizationId: string, schoolId: string) {
+    const school = await this.assertSchoolInOrg(organizationId, schoolId);
+    const existingMaster = await this.courseRepo.find({ where: { organizationId } });
+    const existingNames = new Set(existingMaster.map((c) => c.name.trim().toLowerCase()));
+
+    return this.tenantSchema.runInSchema(school.schemaName, async (em) => {
+      const courses = await em.getRepository(TenantCourse).find({
+        where: { schoolId, examBoardCourseId: IsNull() },
+        order: { name: 'ASC' },
+      });
+      const seen = new Set<string>();
+      const candidates: {
+        id: string;
+        name: string;
+        code: string | null;
+        level: string;
+        termSystem: string;
+        durationYears: number;
+        alreadyInMaster: boolean;
+      }[] = [];
+      for (const course of courses) {
+        const key = course.name.trim().toLowerCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({
+          id: course.id,
+          name: course.name,
+          code: course.code,
+          level: course.level,
+          termSystem: course.termSystem,
+          durationYears: course.durationYears,
+          alreadyInMaster: existingNames.has(key),
+        });
+      }
+      return candidates;
+    });
+  }
+
+  /** Copy the given (locally-created) courses of an institution into the org's Exam Board course master. */
+  async importInstitutionCourses(
+    organizationId: string,
+    schoolId: string,
+    courseIds: string[],
+  ) {
+    const school = await this.assertSchoolInOrg(organizationId, schoolId);
+    if (!courseIds.length) {
+      throw new BadRequestException('Select at least one course to copy');
+    }
+    const localCourses = await this.tenantSchema.runInSchema(school.schemaName, async (em) => {
+      return em.getRepository(TenantCourse).find({
+        where: { id: In(courseIds), schoolId },
+      });
+    });
+    if (!localCourses.length) {
+      throw new BadRequestException('No matching courses found for this institution');
+    }
+
+    const existingMaster = await this.courseRepo.find({ where: { organizationId } });
+    const existingNames = new Set(existingMaster.map((c) => c.name.trim().toLowerCase()));
+
+    let created = 0;
+    let skipped = 0;
+    for (const course of localCourses) {
+      const key = course.name.trim().toLowerCase();
+      if (existingNames.has(key)) {
+        skipped++;
+        continue;
+      }
+      existingNames.add(key);
+      await this.courseRepo.save(
+        this.courseRepo.create({
+          organizationId,
+          name: course.name,
+          code: course.code,
+          level: course.level,
+          termSystem: course.termSystem,
+          durationYears: course.durationYears,
+        }),
+      );
+      created++;
+    }
+    return { created, skipped };
   }
 
   // ─── Academic year master ──────────────────────────────────────────────────

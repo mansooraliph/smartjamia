@@ -33,6 +33,7 @@ import {
   CreateExamBoardCourseDto,
   CreateExamBoardSchemeDto,
   CreateExamBoardSubjectDto,
+  ImportInstitutionCoursesDto,
   SetBatchTermSubjectsDto,
   SetInstitutionEnablementDto,
   UpdateExamBoardAcademicYearDto,
@@ -82,6 +83,29 @@ export class ExamBoardController {
       schoolId,
       dto.isEnabled,
     );
+  }
+
+  @Get('institutions/:schoolId/local-courses')
+  @ApiOperation({
+    summary: "List an institution's own locally-created courses, for copying into the Exam Board course master",
+  })
+  listInstitutionLocalCourses(
+    @Req() req: Request,
+    @Param('schoolId') schoolId: string,
+  ) {
+    return this.svc.listInstitutionLocalCourses(this.orgId(req), schoolId);
+  }
+
+  @Post('institutions/:schoolId/import-courses')
+  @ApiOperation({
+    summary: "Copy an institution's local courses into the Exam Board course master",
+  })
+  importInstitutionCourses(
+    @Req() req: Request,
+    @Param('schoolId') schoolId: string,
+    @Body() dto: ImportInstitutionCoursesDto,
+  ) {
+    return this.svc.importInstitutionCourses(this.orgId(req), schoolId, dto.courseIds);
   }
 
   // ─── Course master ──────────────────────────────────────────────────────
