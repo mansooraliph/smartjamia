@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select } from '@/components/ui/Input';
+import { Tabs, TabItem } from '@/components/ui/Tabs';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { toast } from '@/stores/toast.store';
 import { roleLabel } from '@/lib/access';
@@ -23,7 +24,31 @@ function errMsg(e: unknown): string | undefined {
   return anyE?.response?.data?.error?.message ?? anyE?.message ?? 'Something went wrong';
 }
 
+type UsersTab = 'orgAdmins' | 'schoolUsers';
+const USERS_TABS: TabItem<UsersTab>[] = [
+  { key: 'orgAdmins', label: 'Org Admins' },
+  { key: 'schoolUsers', label: 'School Users' },
+];
+
 export function UsersPage() {
+  const [tab, setTab] = useState<UsersTab>('orgAdmins');
+
+  return (
+    <>
+      <PageHeader
+        title="Users"
+        description="Every user across your organization &mdash; organization-level admins and school users."
+      />
+
+      <Tabs items={USERS_TABS} active={tab} onChange={setTab} />
+
+      {tab === 'orgAdmins' && <OrgAdminsSection />}
+      {tab === 'schoolUsers' && <SchoolUsersSection />}
+    </>
+  );
+}
+
+function SchoolUsersSection() {
   const [schoolFilter, setSchoolFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -60,15 +85,7 @@ export function UsersPage() {
   });
 
   return (
-    <>
-      <PageHeader
-        title="Users"
-        description="Every user across your organization's schools, with cross-school access."
-      />
-
-      <OrgAdminsSection />
-
-      <h2 className="mb-3 mt-6 text-base font-semibold text-slate-900">School users</h2>
+    <div>
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Select value={schoolFilter} onChange={(e) => setSchoolFilter(e.target.value)} className="max-w-xs">
           <option value="">All schools</option>
@@ -160,7 +177,7 @@ export function UsersPage() {
       {manageFor && (
         <ManageAccessModal user={manageFor} schools={schools} onClose={() => setManageFor(null)} />
       )}
-    </>
+    </div>
   );
 }
 
