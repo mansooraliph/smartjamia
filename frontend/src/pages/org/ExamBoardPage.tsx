@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
@@ -1261,6 +1261,7 @@ function AcademicYearsTab() {
         isLoading={isLoading}
         emptyMessage="No academic years yet."
         columns={[
+          { key: 'sno', header: 'S.No', render: (y) => years.findIndex((r) => r.id === y.id) + 1 },
           { key: 'name', header: 'Name', render: (y) => (
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-900">{y.name}</span>
@@ -1532,6 +1533,7 @@ function BatchesTab() {
         isLoading={isLoading}
         emptyMessage="No batches yet."
         columns={[
+          { key: 'sno', header: 'S.No', render: (b) => batches.findIndex((r) => r.id === b.id) + 1 },
           { key: 'name', header: 'Batch', render: (b) => (
             <button
               className="text-left leading-tight hover:underline"
@@ -1823,11 +1825,11 @@ function BatchTermSubjects({ batchId, termNumber }: { batchId: string; termNumbe
 
   return (
     <div className="divide-y divide-slate-100 rounded-md border border-slate-200">
-      {rows.map(({ subject, isAssigned }) => (
+      {rows.map(({ subject, isAssigned }, i) => (
         <label key={subject.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
           <span className="min-w-0">
             <span>
-              {subject.name}
+              <span className="mr-2 text-slate-400">{i + 1}.</span>{subject.name}
               {subject.code && <code className="ml-2 text-xs text-slate-400">{subject.code}</code>}
             </span>
             <span className="mt-0.5 block text-xs text-slate-400">
@@ -1852,15 +1854,15 @@ function BatchTermSubjects({ batchId, termNumber }: { batchId: string; termNumbe
 // ── Batch Details (Subjects / Enrolled Students / Exam Schedules tabs) ────────
 type BatchDetailTab = 'subjects' | 'students' | 'exams';
 const BATCH_DETAIL_TABS: TabItem<BatchDetailTab>[] = [
-  { key: 'subjects', label: 'Subjects' },
   { key: 'students', label: 'Enrolled students' },
+  { key: 'subjects', label: 'Subjects' },
   { key: 'exams', label: 'Exam schedules' },
 ];
 
 export function BatchDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<BatchDetailTab>('subjects');
+  const [tab, setTab] = useState<BatchDetailTab>('students');
 
   const { data: batch, isLoading: batchLoading } = useQuery({
     queryKey: ['eb-batch', id],
@@ -2287,26 +2289,24 @@ function BatchExamsTab({ batch }: { batch: ExamBoardBatch }) {
   return (
     <div>
       {terms.length > 0 && (
-        <div className="mb-4 border-b border-slate-200">
-          <nav className="-mb-px flex flex-wrap gap-1">
-            {terms.map((t) => {
-              const isActive = currentTerm === t.number;
-              return (
-                <button
-                  key={t.number}
-                  onClick={() => setActiveTerm(t.number)}
-                  className={`border-b-2 px-3 pb-2.5 text-sm font-medium ${
-                    isActive
-                      ? 'border-brand-500 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
+        <nav className="mb-4 inline-flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
+          {terms.map((t) => {
+            const isActive = currentTerm === t.number;
+            return (
+              <button
+                key={t.number}
+                onClick={() => setActiveTerm(t.number)}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-white text-brand-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t.label}
+              </button>
+            );
+          })}
+        </nav>
       )}
 
       <DataTable<ExamBoardExam>
