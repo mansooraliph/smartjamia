@@ -649,7 +649,8 @@ function OrgAdminsTab({ organizationId }: { organizationId: string }) {
   });
 
   const resetPassword = useMutation({
-    mutationFn: (adminId: string) => OrgAdminsApi.resetPassword(adminId),
+    mutationFn: ({ adminId, password }: { adminId: string; password?: string }) =>
+      OrgAdminsApi.resetPassword(adminId, password),
     onSuccess: (r) => {
       setResettingFor(null);
       if (r.temporaryPassword) {
@@ -739,17 +740,117 @@ function OrgAdminsTab({ organizationId }: { organizationId: string }) {
         confirmText="Delete admin"
       />
 
-      <ConfirmDialog
-        open={!!resettingFor}
-        onClose={() => setResettingFor(null)}
-        onConfirm={() => resettingFor && resetPassword.mutate(resettingFor.id)}
-        loading={resetPassword.isPending}
-        destructive={false}
-        title="Reset password?"
-        message={`A new temporary password will be generated for "${resettingFor?.name}" (${resettingFor?.email}). Share it with them securely.`}
-        confirmText="Reset password"
+      <ResetPasswordModal
+        admin={resettingFor}
+        saving={resetPassword.isPending}
+        errorMsg={errMsg(resetPassword.error)}
+        onClose={() => {
+          setResettingFor(null);
+          resetPassword.reset();
+        }}
+        onSubmit={(password) =>
+          resettingFor && resetPassword.mutate({ adminId: resettingFor.id, password })
+        }
       />
     </>
+  );
+}
+
+function ResetPasswordModal({
+  admin,
+  onClose,
+  onSubmit,
+  saving,
+  errorMsg,
+}: {
+  admin: OrgAdmin | null;
+  onClose: () => void;
+  onSubmit: (password?: string) => void;
+  saving: boolean;
+  errorMsg?: string;
+}) {
+  const [mode, setMode] = useState<'auto' | 'manual'>('auto');
+  const [password, setPassword] = useState('');
+  const manualError = mode === 'manual' && password.length > 0 && password.length < 8
+    ? 'At least 8 characters'
+    : undefined;
+  const canSubmit = mode === 'auto' || password.length >= 8;
+
+  const submit = () => onSubmit(mode === 'manual' ? password : undefined);
+
+  return (
+    <Modal
+      open={!!admin}
+      onClose={() => {
+        setMode('auto');
+        setPassword('');
+        onClose();
+      }}
+      title="Reset password"
+      description={admin ? `For "${admin.name}" (${admin.email})` : undefined}
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={submit}
+            disabled={saving || !canSubmit}
+          >
+            {saving ? 'Resetting…' : 'Reset password'}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 p-3 hover:bg-slate-50 has-[:checked]:border-brand-400 has-[:checked]:bg-brand-50/50">
+          <input
+            type="radio"
+            className="mt-0.5"
+            checked={mode === 'auto'}
+            onChange={() => setMode('auto')}
+          />
+          <div>
+            <div className="text-sm font-medium text-slate-900">Auto-generate</div>
+            <div className="text-xs text-slate-500">
+              A random temporary password is created and shown once — share it securely.
+            </div>
+          </div>
+        </label>
+
+        <label className="flex cursor-pointer items-start gap-2 rounded-md border border-slate-200 p-3 hover:bg-slate-50 has-[:checked]:border-brand-400 has-[:checked]:bg-brand-50/50">
+          <input
+            type="radio"
+            className="mt-0.5"
+            checked={mode === 'manual'}
+            onChange={() => setMode('manual')}
+          />
+          <div className="flex-1">
+            <div className="text-sm font-medium text-slate-900">Set a specific password</div>
+            <div className="mb-2 text-xs text-slate-500">Choose the new password yourself.</div>
+            {mode === 'manual' && (
+              <Field label="New password" error={manualError}>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Min 8 chars"
+                  autoFocus
+                />
+              </Field>
+            )}
+          </div>
+        </label>
+
+        {errorMsg && (
+          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {errorMsg}
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
