@@ -295,12 +295,40 @@ export class ExamBoardService {
     });
   }
 
-  createAcademicYear(
+  /**
+   * A new academic year is auto-enabled for every institution already copied
+   * into the Exam Board (isEnabled=true) — org admins shouldn't have to
+   * revisit each institution's Manage screen just to turn on a new year.
+   */
+  async createAcademicYear(
     organizationId: string,
     dto: CreateExamBoardAcademicYearDto,
   ) {
     const year = this.yearRepo.create({ ...dto, organizationId });
-    return this.yearRepo.save(year);
+    const saved = await this.yearRepo.save(year);
+    await this.enableYearForAllInstitutions(organizationId, saved.id);
+    return saved;
+  }
+
+  private async enableYearForAllInstitutions(organizationId: string, yearId: string) {
+    const institutions = await this.institutionRepo.find({
+      where: { organizationId, isEnabled: true },
+    });
+    for (const institution of institutions) {
+      let link = await this.institutionYearRepo.findOne({
+        where: { schoolId: institution.schoolId, examBoardAcademicYearId: yearId },
+      });
+      if (!link) {
+        link = this.institutionYearRepo.create({
+          organizationId,
+          schoolId: institution.schoolId,
+          examBoardAcademicYearId: yearId,
+        });
+      }
+      link.isEnabled = true;
+      await this.institutionYearRepo.save(link);
+      await this.syncInstitutionMirror(organizationId, institution.schoolId);
+    }
   }
 
   async updateAcademicYear(
@@ -446,12 +474,14 @@ export class ExamBoardService {
       this.institutionCourseRepo.find({ where: { schoolId, isEnabled: true } }),
       this.institutionYearRepo.find({ where: { schoolId, isEnabled: true } }),
     ]);
-    if (!courseLinks.length || !yearLinks.length) return;
+    if (!yearLinks.length) return;
 
     const [courses, years] = await Promise.all([
-      this.courseRepo.find({
-        where: { id: In(courseLinks.map((l) => l.examBoardCourseId)) },
-      }),
+      courseLinks.length
+        ? this.courseRepo.find({
+            where: { id: In(courseLinks.map((l) => l.examBoardCourseId)) },
+          })
+        : Promise.resolve([]),
       this.yearRepo.find({
         where: { id: In(yearLinks.map((l) => l.examBoardAcademicYearId)) },
       }),
