@@ -373,6 +373,29 @@ export class IdentityService {
     return { deleted: true, id };
   }
 
+  async resetOrgAdminPassword(id: string, dto: ResetPasswordDto) {
+    const admin = await this.orgAdminRepo.findOne({ where: { id } });
+    if (!admin) throw new NotFoundException('Admin not found');
+
+    const temporaryPassword = dto.password ?? this.generateTempPassword();
+    admin.passwordHash = await bcrypt.hash(temporaryPassword, this.rounds);
+    await this.orgAdminRepo.save(admin);
+    return {
+      reset: true,
+      temporaryPassword: dto.password ? undefined : temporaryPassword,
+    };
+  }
+
+  async removeOrgAdminForOrg(organizationId: string, id: string) {
+    const admin = await this.orgAdminRepo.findOne({ where: { id } });
+    if (!admin) throw new NotFoundException('Admin not found');
+    if (admin.organizationId !== organizationId) {
+      throw new ForbiddenException('Admin is not in your organization');
+    }
+    await this.orgAdminRepo.softRemove(admin);
+    return { deleted: true, id };
+  }
+
   // ─── helpers (never leak password hashes) ─────────────────────────────────
   private publicAccount(a: UserAccount) {
     return {

@@ -22,4 +22,12 @@ export const OrgRolesApi = {
   ): Promise<RoleView> => unwrap(await api.patch(`/org/schools/${schoolId}/roles/${id}`, data)),
   remove: async (schoolId: string, id: string) =>
     unwrap(await api.delete(`/org/schools/${schoolId}/roles/${id}`)),
+  updateSystemRole: async (
+    schoolId: string,
+    key: string,
+    permissions: string[],
+  ): Promise<RoleView> =>
+    unwrap(await api.patch(`/org/schools/${schoolId}/roles/system/${key}`, { permissions })),
+  resetSystemRole: async (schoolId: string, key: string) =>
+    unwrap(await api.delete(`/org/schools/${schoolId}/roles/system/${key}`)),
 };

@@ -11,6 +11,7 @@ import {
 } from 'class-validator';
 
 export const COURSE_LEVELS = [
+  'higher_secondary',
   'ug',
   'pg',
   'diploma',

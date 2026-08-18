@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import slugify from 'slugify';
 import { Role } from '../../../database/tenant/role.entity';
+import { RolePermissionOverride } from '../../../database/tenant/role-permission-override.entity';
 import { User } from '../../../database/tenant/user.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
 import {
@@ -23,6 +24,8 @@ export interface RoleView {
   name: string;
   description: string | null;
   isSystem: boolean;
+  /** True when a system role's default permissions have been overridden for this school. */
+  isCustomized: boolean;
   permissions: string[];
   userCount: number;
 }
@@ -42,6 +45,10 @@ export class RolesService {
       const custom = await em
         .getRepository(Role)
         .find({ where: { schoolId }, order: { name: 'ASC' } });
+      const overrides = await em
+        .getRepository(RolePermissionOverride)
+        .find({ where: { schoolId } });
+      const overrideByKey = new Map(overrides.map((o) => [o.roleKey, o.permissions]));
 
       // count users per effective role
       const users = await em
@@ -56,21 +63,26 @@ export class RolesService {
         .getRawMany<{ rolekey: string; count: string }>();
       const countByKey = new Map(users.map((r) => [r.rolekey, Number(r.count)]));
 
-      const system: RoleView[] = SYSTEM_ROLES.map((r) => ({
-        id: null,
-        key: r.key,
-        name: r.name,
-        description: r.description ?? null,
-        isSystem: true,
-        permissions: r.permissions,
-        userCount: countByKey.get(r.key) ?? 0,
-      }));
+      const system: RoleView[] = SYSTEM_ROLES.map((r) => {
+        const override = overrideByKey.get(r.key);
+        return {
+          id: null,
+          key: r.key,
+          name: r.name,
+          description: r.description ?? null,
+          isSystem: true,
+          isCustomized: !!override,
+          permissions: override ?? r.permissions,
+          userCount: countByKey.get(r.key) ?? 0,
+        };
+      });
       const customViews: RoleView[] = custom.map((r) => ({
         id: r.id,
         key: r.key,
         name: r.name,
         description: r.description,
         isSystem: false,
+        isCustomized: false,
         permissions: r.permissions ?? [],
         userCount: countByKey.get(r.key) ?? 0,
       }));
@@ -109,6 +121,42 @@ export class RolesService {
       if (dto.permissions !== undefined)
         role.permissions = sanitizePermissions(dto.permissions);
       return repo.save(role);
+    });
+  }
+
+  /** Override a built-in role's permission set for this school. */
+  updateSystemRole(
+    schemaName: string,
+    schoolId: string,
+    key: string,
+    permissions: string[],
+  ) {
+    if (!isSystemRole(key)) {
+      throw new NotFoundException(`"${key}" is not a built-in role`);
+    }
+    return this.tenant.runInSchema(schemaName, async (em) => {
+      const repo = em.getRepository(RolePermissionOverride);
+      let override = await repo.findOne({ where: { schoolId, roleKey: key } });
+      const sanitized = sanitizePermissions(permissions);
+      if (override) {
+        override.permissions = sanitized;
+      } else {
+        override = repo.create({ schoolId, roleKey: key, permissions: sanitized });
+      }
+      return repo.save(override);
+    });
+  }
+
+  /** Revert a built-in role to its default (code-defined) permission set. */
+  resetSystemRole(schemaName: string, schoolId: string, key: string) {
+    if (!isSystemRole(key)) {
+      throw new NotFoundException(`"${key}" is not a built-in role`);
+    }
+    return this.tenant.runInSchema(schemaName, async (em) => {
+      const repo = em.getRepository(RolePermissionOverride);
+      const override = await repo.findOne({ where: { schoolId, roleKey: key } });
+      if (override) await repo.remove(override);
+      return { reset: true, key };
     });
   }
 

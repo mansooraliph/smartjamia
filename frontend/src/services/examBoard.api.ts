@@ -8,6 +8,7 @@ function unwrap<T>(r: { data: { data?: T } | T }): T {
 
 // ───── Types ────────────────────────────────────────────────────────────────
 export type ExamBoardCourseLevel =
+  | 'higher_secondary'
   | 'ug'
   | 'pg'
   | 'diploma'
@@ -60,6 +61,7 @@ export interface ExamBoardBatch {
   name: string;
   code: string | null;
   capacity: number | null;
+  currentTermNumber: number;
   status: 'active' | 'closed';
   createdAt: string;
 }
@@ -113,6 +115,7 @@ export type ExamBoardExamType =
   | 'quarterly'
   | 'half_yearly';
 export type ExamBoardExamStatus = 'draft' | 'scheduled' | 'ongoing' | 'completed';
+export type ExamBoardExamCategory = 'regular' | 'supplementary';
 
 export interface ExamBoardExam {
   id: string;
@@ -121,10 +124,17 @@ export interface ExamBoardExam {
   termNumber: number;
   name: string;
   examType: ExamBoardExamType;
+  examCategory: ExamBoardExamCategory;
   startDate: string;
   endDate: string;
   status: ExamBoardExamStatus;
   createdAt: string;
+}
+
+export interface OrgExamRow extends ExamBoardExam {
+  batchName: string;
+  examBoardCourseId: string;
+  schoolId: string;
 }
 
 export interface ExamBoardExamSubject {
@@ -143,6 +153,8 @@ export interface CreateBatchExamPayload {
   termNumber: number;
   name: string;
   examType: ExamBoardExamType;
+  examCategory?: ExamBoardExamCategory;
+  status?: ExamBoardExamStatus;
   startDate: string;
   endDate: string;
 }
@@ -195,6 +207,7 @@ export interface CreateExamBoardBatchPayload {
   name: string;
   code?: string;
   capacity?: number;
+  currentTermNumber?: number;
 }
 
 export interface CreateExamBoardSchemePayload {
@@ -294,6 +307,16 @@ export const ExamBoardApi = {
     unwrap(await api.get(`/org/exam-board/batches/${id}/enrollments`)),
   listBatchExams: async (id: string): Promise<ExamBoardExam[]> =>
     unwrap(await api.get(`/org/exam-board/batches/${id}/exams`)),
+  listOrgExams: async (filters?: {
+    examBoardBatchId?: string;
+    termNumber?: number;
+    examType?: string;
+    examCategory?: string;
+    status?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  }): Promise<OrgExamRow[]> =>
+    unwrap(await api.get('/org/exam-board/exams', { params: filters })),
   listBatchExamSubjects: async (batchId: string, examId: string): Promise<ExamBoardExamSubject[]> =>
     unwrap(await api.get(`/org/exam-board/batches/${batchId}/exams/${examId}/subjects`)),
   createBatchExam: async (batchId: string, payload: CreateBatchExamPayload): Promise<ExamBoardExam> =>

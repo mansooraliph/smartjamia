@@ -34,6 +34,7 @@ import { Field, Input, Select } from '@/components/ui/Input';
 import { cn } from '@/lib/cn';
 
 const LEVEL_LABEL: Record<CourseLevel, string> = {
+  higher_secondary: 'Higher Secondary',
   ug: 'Undergraduate (UG)',
   pg: 'Postgraduate (PG)',
   diploma: 'Diploma',
@@ -41,7 +42,7 @@ const LEVEL_LABEL: Record<CourseLevel, string> = {
   certificate: 'Certificate',
   other: 'Other',
 };
-const LEVELS: CourseLevel[] = ['ug', 'pg', 'diploma', 'phd', 'certificate', 'other'];
+const LEVELS: CourseLevel[] = ['higher_secondary', 'ug', 'pg', 'diploma', 'phd', 'certificate', 'other'];
 
 const classSchema = z.object({
   academicYearId: z.string().uuid('Required'),
@@ -52,7 +53,7 @@ const classSchema = z.object({
 type ClassForm = z.infer<typeof classSchema>;
 
 const courseSchema = z.object({
-  level: z.enum(['ug', 'pg', 'diploma', 'phd', 'certificate', 'other']),
+  level: z.enum(['higher_secondary', 'ug', 'pg', 'diploma', 'phd', 'certificate', 'other']),
   name: z.string().min(1, 'Required'),
   code: z.string().optional().or(z.literal('')),
   termSystem: z.enum(['annual', 'semester', 'trimester']),

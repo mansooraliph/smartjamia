@@ -41,6 +41,7 @@ export function classLabel(cls: {
 }
 
 export type CourseLevel =
+  | 'higher_secondary'
   | 'ug'
   | 'pg'
   | 'diploma'
@@ -263,6 +264,7 @@ export interface RoleView {
   name: string;
   description: string | null;
   isSystem: boolean;
+  isCustomized: boolean;
   permissions: string[];
   userCount: number;
 }
@@ -355,6 +357,10 @@ export const RbacApi = {
   ): Promise<RoleView> => unwrap(await api.patch(`/school/roles/${id}`, data)),
   deleteRole: async (id: string) =>
     unwrap(await api.delete(`/school/roles/${id}`)),
+  updateSystemRole: async (key: string, permissions: string[]): Promise<RoleView> =>
+    unwrap(await api.patch(`/school/roles/system/${key}`, { permissions })),
+  resetSystemRole: async (key: string) =>
+    unwrap(await api.delete(`/school/roles/system/${key}`)),
 };
 
 export const SettingsApi = {

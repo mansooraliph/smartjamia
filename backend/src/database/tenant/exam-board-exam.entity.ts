@@ -15,6 +15,7 @@ export type ExamBoardExamType =
   | 'half_yearly';
 
 export type ExamBoardExamStatus = 'draft' | 'scheduled' | 'ongoing' | 'completed';
+export type ExamBoardExamCategory = 'regular' | 'supplementary';
 
 /**
  * An exam scheduled and conducted by the Examination Board, scoped to one
@@ -46,6 +47,14 @@ export class ExamBoardExam {
     name: 'exam_type',
   })
   examType: ExamBoardExamType;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    name: 'exam_category',
+    default: 'regular',
+  })
+  examCategory: ExamBoardExamCategory;
 
   @Column({ type: 'date', name: 'start_date' })
   startDate: Date;

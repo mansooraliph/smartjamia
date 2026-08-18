@@ -9,6 +9,7 @@ config({ path: join(process.cwd(), '..', '.env') });
 // Tenant entities
 import { User } from './tenant/user.entity';
 import { Role } from './tenant/role.entity';
+import { RolePermissionOverride } from './tenant/role-permission-override.entity';
 import { SchoolProfile } from './tenant/school-profile.entity';
 import { AcademicYear } from './tenant/academic-year.entity';
 import { Course } from './tenant/course.entity';
@@ -57,6 +58,7 @@ import { BiometricEnrollment } from './tenant/biometric-enrollment.entity';
 export const TENANT_ENTITIES = [
   User,
   Role,
+  RolePermissionOverride,
   SchoolProfile,
   AcademicYear,
   Course,

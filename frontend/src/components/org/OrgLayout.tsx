@@ -16,6 +16,7 @@ import {
   LogOut,
   Bell,
   ClipboardList,
+  Settings,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { OrgPortalApi } from '@/services/org.api';
@@ -24,6 +25,7 @@ import { cn } from '@/lib/cn';
 const navItems = [
   { to: '/org', label: 'Schools', icon: Network, end: true },
   { to: '/org/users', label: 'Users', icon: Users },
+  { to: '/org/settings', label: 'Settings', icon: Settings },
 ];
 
 const examBoardNav = [

@@ -18,7 +18,11 @@ import { Request } from 'express';
 import { OrganizationGuard } from '../../../common/guards/organization.guard';
 import { School } from '../../../database/master/school.entity';
 import { RolesService } from '../../tenant/roles/roles.service';
-import { CreateRoleDto, UpdateRoleDto } from '../../tenant/roles/dto/role.dto';
+import {
+  CreateRoleDto,
+  UpdateRoleDto,
+  UpdateSystemRolePermissionsDto,
+} from '../../tenant/roles/dto/role.dto';
 
 /**
  * Org Admin's view of each school's custom roles & permissions. `RolesService`
@@ -70,6 +74,29 @@ export class OrgRolesController {
   ) {
     const school = await this.resolveSchool(req, schoolId);
     return this.roles.create(school.schemaName, school.id, dto);
+  }
+
+  @Patch('system/:key')
+  @ApiOperation({ summary: "Override a built-in role's permissions for this school" })
+  async updateSystem(
+    @Req() req: Request,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('key') key: string,
+    @Body() dto: UpdateSystemRolePermissionsDto,
+  ) {
+    const school = await this.resolveSchool(req, schoolId);
+    return this.roles.updateSystemRole(school.schemaName, school.id, key, dto.permissions);
+  }
+
+  @Delete('system/:key')
+  @ApiOperation({ summary: 'Reset a built-in role to its default permissions' })
+  async resetSystem(
+    @Req() req: Request,
+    @Param('schoolId', new ParseUUIDPipe()) schoolId: string,
+    @Param('key') key: string,
+  ) {
+    const school = await this.resolveSchool(req, schoolId);
+    return this.roles.resetSystemRole(school.schemaName, school.id, key);
   }
 
   @Patch(':id')

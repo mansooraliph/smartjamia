@@ -48,6 +48,11 @@ export class ExamBoardBatch {
   @Column({ type: 'integer', nullable: true })
   capacity: number | null;
 
+  /** The Year/Semester/Trimester this batch is currently running. Drives the
+   *  default term when scheduling a new exam for this batch. */
+  @Column({ type: 'integer', name: 'current_term_number', default: 1 })
+  currentTermNumber: number;
+
   @Column({
     type: 'enum',
     enum: ['active', 'closed'],

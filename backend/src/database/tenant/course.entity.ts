@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 
 export type CourseLevel =
+  | 'higher_secondary'
   | 'ug'
   | 'pg'
   | 'diploma'
@@ -37,7 +38,7 @@ export class Course {
 
   @Column({
     type: 'enum',
-    enum: ['ug', 'pg', 'diploma', 'phd', 'certificate', 'other'],
+    enum: ['higher_secondary', 'ug', 'pg', 'diploma', 'phd', 'certificate', 'other'],
     default: 'ug',
   })
   level: CourseLevel;

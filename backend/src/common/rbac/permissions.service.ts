@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Role } from '../../database/tenant/role.entity';
+import { RolePermissionOverride } from '../../database/tenant/role-permission-override.entity';
 import { TenantSchemaService } from '../tenant/tenant-schema.service';
 import { isSystemRole, systemRole } from './permissions';
 
@@ -19,7 +20,17 @@ export class PermissionsService {
     const roleKey = req.user?.role;
     let perms: string[] = [];
 
-    if (roleKey && isSystemRole(roleKey)) {
+    if (roleKey && isSystemRole(roleKey) && req.tenant?.schemaName) {
+      const schoolId = req.tenant.schoolId ?? req.user?.schoolId ?? '';
+      const override = await this.tenant.runInSchema(
+        req.tenant.schemaName,
+        (em) =>
+          em
+            .getRepository(RolePermissionOverride)
+            .findOne({ where: { schoolId, roleKey } }),
+      );
+      perms = override?.permissions ?? systemRole(roleKey)?.permissions ?? [];
+    } else if (roleKey && isSystemRole(roleKey)) {
       perms = systemRole(roleKey)?.permissions ?? [];
     } else if (roleKey && req.tenant?.schemaName) {
       const schoolId = req.tenant.schoolId ?? req.user?.schoolId ?? '';

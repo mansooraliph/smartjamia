@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Post,
@@ -14,6 +15,7 @@ import { OrganizationGuard } from '../../../common/guards/organization.guard';
 import { IdentityService } from '../identity/identity.service';
 import {
   CreateGrantDto,
+  CreateOrganizationAdminDto,
   CreateOrgUserDto,
   ResetPasswordDto,
 } from '../identity/dto/identity.dto';
@@ -85,5 +87,26 @@ export class OrgUsersController {
   @ApiOperation({ summary: "List a user's login activity" })
   activity(@Req() req: Request, @Param('id') id: string) {
     return this.identity.listActivityForOrg(this.orgId(req), id);
+  }
+
+  // ─── Organization-level admins ─────────────────────────────────────────────
+  // Distinct from school users above: these accounts log in at /org/login and
+  // manage the whole org (not scoped to a single school).
+  @Get('org-admins')
+  @ApiOperation({ summary: 'List organization-level admin accounts' })
+  listOrgAdmins(@Req() req: Request) {
+    return this.identity.listOrgAdmins(this.orgId(req));
+  }
+
+  @Post('org-admins')
+  @ApiOperation({ summary: 'Create an organization-level admin account' })
+  createOrgAdmin(@Req() req: Request, @Body() dto: CreateOrganizationAdminDto) {
+    return this.identity.createOrgAdmin(this.orgId(req), dto);
+  }
+
+  @Delete('org-admins/:id')
+  @ApiOperation({ summary: 'Remove an organization-level admin account' })
+  removeOrgAdmin(@Req() req: Request, @Param('id') id: string) {
+    return this.identity.removeOrgAdminForOrg(this.orgId(req), id);
   }
 }

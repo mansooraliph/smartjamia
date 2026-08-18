@@ -14,6 +14,7 @@ import {
 } from 'class-validator';
 
 const COURSE_LEVELS = [
+  'higher_secondary',
   'ug',
   'pg',
   'diploma',
@@ -337,6 +338,12 @@ export class CreateExamBoardBatchDto {
   @IsInt()
   @Min(1)
   capacity?: number;
+
+  @ApiPropertyOptional({ default: 1, description: 'The Year/Semester/Trimester this batch is currently running' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  currentTermNumber?: number;
 }
 
 export class UpdateExamBoardBatchDto {
@@ -363,6 +370,12 @@ export class UpdateExamBoardBatchDto {
   @Min(1)
   capacity?: number;
 
+  @ApiPropertyOptional({ description: 'The Year/Semester/Trimester this batch is currently running' })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  currentTermNumber?: number;
+
   @ApiPropertyOptional({ enum: ['active', 'closed'] })
   @IsOptional()
   @IsIn(['active', 'closed'])
@@ -372,6 +385,8 @@ export class UpdateExamBoardBatchDto {
 // ─── Batch exam scheduling (org admin can schedule on a college's behalf) ───
 
 const EXAM_TYPES = ['unit_test', 'mid_term', 'final', 'quarterly', 'half_yearly'] as const;
+const EXAM_CATEGORIES = ['regular', 'supplementary'] as const;
+const EXAM_STATUSES = ['draft', 'scheduled', 'ongoing', 'completed'] as const;
 
 export class CreateBatchExamDto {
   @ApiProperty({ example: 1, description: 'Year/Semester/Trimester number within the course' })
@@ -387,6 +402,16 @@ export class CreateBatchExamDto {
   @ApiProperty({ enum: EXAM_TYPES })
   @IsIn(EXAM_TYPES)
   examType: (typeof EXAM_TYPES)[number];
+
+  @ApiPropertyOptional({ enum: EXAM_CATEGORIES, default: 'regular' })
+  @IsOptional()
+  @IsIn(EXAM_CATEGORIES)
+  examCategory?: (typeof EXAM_CATEGORIES)[number];
+
+  @ApiPropertyOptional({ enum: EXAM_STATUSES, default: 'scheduled' })
+  @IsOptional()
+  @IsIn(EXAM_STATUSES)
+  status?: (typeof EXAM_STATUSES)[number];
 
   @ApiProperty()
   @IsDateString()

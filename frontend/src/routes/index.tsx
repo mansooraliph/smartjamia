@@ -45,6 +45,7 @@ import { OrgLoginPage } from '@/pages/org/OrgLoginPage';
 import { OrgDashboardPage } from '@/pages/org/OrgDashboardPage';
 import { UsersPage as OrgUsersPage } from '@/pages/org/UsersPage';
 import { SchoolDetailPage as OrgSchoolDetailPage } from '@/pages/org/SchoolDetailPage';
+import { OrgSettingsPage } from '@/pages/org/OrgSettingsPage';
 import { OrgLayout } from '@/components/org/OrgLayout';
 import {
   InstitutionsPage as EbInstitutionsPage,
@@ -143,6 +144,7 @@ export function AppRoutes() {
       >
         <Route index element={<OrgDashboardPage />} />
         <Route path="users" element={<OrgUsersPage />} />
+        <Route path="settings" element={<OrgSettingsPage />} />
         <Route path="schools/:id" element={<OrgSchoolDetailPage />} />
         <Route path="exam-board/institutions" element={<EbInstitutionsPage />} />
         <Route path="exam-board/courses" element={<EbCoursesPage />} />

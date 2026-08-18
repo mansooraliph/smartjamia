@@ -39,6 +39,20 @@ export interface CreateOrgUserPayload {
   grants: { schoolId: string; role: string }[];
 }
 
+export interface OrgAdmin {
+  id: string;
+  name: string;
+  email: string;
+  status: 'active' | 'inactive';
+  createdAt: string;
+}
+
+export interface CreateOrgAdminPayload {
+  name: string;
+  email: string;
+  password: string;
+}
+
 export const OrgUsersApi = {
   list: async (filters?: {
     schoolId?: string;
@@ -57,4 +71,9 @@ export const OrgUsersApi = {
   activity: async (userId: string): Promise<OrgUserActivity[]> =>
     unwrap(await api.get(`/org/users/${userId}/activity`)),
   revokeGrant: async (grantId: string) => unwrap(await api.delete(`/org/grants/${grantId}`)),
+
+  listOrgAdmins: async (): Promise<OrgAdmin[]> => unwrap(await api.get('/org/users/org-admins')),
+  createOrgAdmin: async (payload: CreateOrgAdminPayload): Promise<OrgAdmin> =>
+    unwrap(await api.post('/org/users/org-admins', payload)),
+  removeOrgAdmin: async (id: string) => unwrap(await api.delete(`/org/users/org-admins/${id}`)),
 };

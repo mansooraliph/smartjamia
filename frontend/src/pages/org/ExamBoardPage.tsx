@@ -1,10 +1,10 @@
-﻿import { useEffect, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, Copy, Pencil, Plus, Printer, Search, Settings2, Star, Trash2, Upload } from 'lucide-react';
+import { ArrowLeft, CalendarPlus, Copy, Pencil, Plus, Printer, Search, Settings2, Star, Trash2, Upload } from 'lucide-react';
 import {
   CourseTerm,
   CreateBatchExamPayload,
@@ -23,6 +23,7 @@ import {
   ExamBoardInstitution,
   ExamBoardScheme,
   ExamBoardSubject,
+  OrgExamRow,
 } from '@/services/examBoard.api';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
@@ -138,10 +139,19 @@ function errMsg(e: unknown): string | undefined {
 function InstitutionsTab() {
   const qc = useQueryClient();
   const [manage, setManage] = useState<ExamBoardInstitution | null>(null);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [enabledFilter, setEnabledFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
   const { data: institutions = [], isLoading } = useQuery({
     queryKey: ['eb-institutions'],
     queryFn: ExamBoardApi.listInstitutions,
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, enabledFilter, limit]);
 
   const toggle = useMutation({
     mutationFn: ({ schoolId, isEnabled }: { schoolId: string; isEnabled: boolean }) =>
@@ -153,17 +163,56 @@ function InstitutionsTab() {
     onError: (e) => toast.error(errMsg(e)),
   });
 
+  const statusOptions = useMemo(
+    () => [...new Set(institutions.map((r) => r.school.status))].sort(),
+    [institutions],
+  );
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return institutions.filter((r) => {
+      if (q && !r.school.name.toLowerCase().includes(q) && !(r.school.code ?? '').toLowerCase().includes(q)) return false;
+      if (statusFilter && r.school.status !== statusFilter) return false;
+      if (enabledFilter && String(r.isEnabled) !== enabledFilter) return false;
+      return true;
+    });
+  }, [institutions, search, statusFilter, enabledFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / limit));
+  const pageRows = filtered.slice((page - 1) * limit, page * limit);
+
   return (
     <div>
       <p className="mb-3 text-sm text-slate-500">
         Once copied, enable its courses and academic years below.
       </p>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative w-64">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            placeholder="Search by name or code"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-md border border-slate-200 py-1.5 pl-9 pr-3 text-sm"
+          />
+        </div>
+        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[9rem]">
+          <option value="">All statuses</option>
+          {statusOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+        </Select>
+        <Select value={enabledFilter} onChange={(e) => setEnabledFilter(e.target.value)} className="max-w-[10rem]">
+          <option value="">All (Exam Board)</option>
+          <option value="true">Copied in</option>
+          <option value="false">Not copied</option>
+        </Select>
+      </div>
       <DataTable<ExamBoardInstitution>
-        rows={institutions}
+        rows={pageRows}
         getRowId={(r) => r.school.id}
         isLoading={isLoading}
-        emptyMessage="No schools in this organization yet."
+        emptyMessage={search || statusFilter || enabledFilter ? 'No schools match these filters.' : 'No schools in this organization yet.'}
         columns={[
+          { key: 'sno', header: 'S.No', render: (r) => (page - 1) * limit + pageRows.findIndex((x) => x.school.id === r.school.id) + 1 },
           {
             key: 'name',
             header: 'School',
@@ -212,6 +261,8 @@ function InstitutionsTab() {
           </>
         )}
       />
+
+      <Pagination page={page} totalPages={totalPages} total={filtered.length} limit={limit} onPageChange={setPage} onLimitChange={setLimit} />
 
       {manage && (
         <ManageInstitutionModal
@@ -349,7 +400,8 @@ function ManageInstitutionModal({
 }
 
 // ── Courses ────────────────────────────────────────────────────────────────────
-const LEVELS = ['ug', 'pg', 'diploma', 'phd', 'certificate', 'other'] as const;
+const LEVELS = ['higher_secondary', 'ug', 'pg', 'diploma', 'phd', 'certificate', 'other'] as const;
+const levelLabel = (l: string) => (l === 'higher_secondary' ? 'Higher Secondary' : l.toUpperCase());
 const TERM_SYSTEMS = ['annual', 'semester', 'trimester'] as const;
 
 const courseSchema = z.object({
@@ -366,10 +418,33 @@ function CoursesTab() {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<ExamBoardCourse | null>(null);
   const [deleting, setDeleting] = useState<ExamBoardCourse | null>(null);
+  const [search, setSearch] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [termSystemFilter, setTermSystemFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
   const { data: courses = [], isLoading } = useQuery({
     queryKey: ['eb-courses'],
     queryFn: ExamBoardApi.listCourses,
   });
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, levelFilter, termSystemFilter, statusFilter, limit]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return courses.filter((c) => {
+      if (q && !c.name.toLowerCase().includes(q) && !(c.code ?? '').toLowerCase().includes(q)) return false;
+      if (levelFilter && c.level !== levelFilter) return false;
+      if (termSystemFilter && c.termSystem !== termSystemFilter) return false;
+      if (statusFilter && String(c.isActive) !== statusFilter) return false;
+      return true;
+    });
+  }, [courses, search, levelFilter, termSystemFilter, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / limit));
+  const pageRows = filtered.slice((page - 1) * limit, page * limit);
 
   const remove = useMutation({
     mutationFn: (id: string) => ExamBoardApi.deleteCourse(id),
@@ -410,24 +485,50 @@ function CoursesTab() {
 
   return (
     <div>
-      <div className="mb-3 flex justify-end">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              placeholder="Search by name or code"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-md border border-slate-200 py-1.5 pl-9 pr-3 text-sm"
+            />
+          </div>
+          <Select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)} className="max-w-[9rem]">
+            <option value="">All levels</option>
+            {LEVELS.map((l) => <option key={l} value={l}>{levelLabel(l)}</option>)}
+          </Select>
+          <Select value={termSystemFilter} onChange={(e) => setTermSystemFilter(e.target.value)} className="max-w-[9rem]">
+            <option value="">All term systems</option>
+            {TERM_SYSTEMS.map((t) => <option key={t} value={t}>{t}</option>)}
+          </Select>
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[9rem]">
+            <option value="">All statuses</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </Select>
+        </div>
         <button className="btn-primary" onClick={openCreate}>
           <Plus className="mr-1.5 h-4 w-4" /> Add course
         </button>
       </div>
       <DataTable<ExamBoardCourse>
-        rows={courses}
+        rows={pageRows}
         getRowId={(r) => r.id}
         isLoading={isLoading}
         emptyMessage="No courses yet."
         columns={[
+          { key: 'sno', header: 'S.No', render: (c) => (page - 1) * limit + pageRows.findIndex((r) => r.id === c.id) + 1 },
           { key: 'name', header: 'Course', render: (c) => (
             <div className="leading-tight">
               <div className="font-medium text-slate-900">{c.name}</div>
               {c.code && <code className="text-xs text-slate-500">{c.code}</code>}
             </div>
           ) },
-          { key: 'level', header: 'Level', render: (c) => <Badge tone="indigo">{c.level.toUpperCase()}</Badge> },
+          { key: 'level', header: 'Level', render: (c) => <Badge tone="indigo">{levelLabel(c.level)}</Badge> },
           { key: 'termSystem', header: 'Term system' },
           { key: 'durationYears', header: 'Duration (yrs)' },
           { key: 'isActive', header: 'Status', render: (c) => (
@@ -445,6 +546,8 @@ function CoursesTab() {
           </>
         )}
       />
+
+      <Pagination page={page} totalPages={totalPages} total={filtered.length} limit={limit} onPageChange={setPage} onLimitChange={setLimit} />
 
       <ConfirmDialog
         open={!!deleting}
@@ -481,7 +584,7 @@ function CoursesTab() {
           </Field>
           <Field label="Level" error={errors.level?.message}>
             <Select {...register('level')}>
-              {LEVELS.map((l) => <option key={l} value={l}>{l.toUpperCase()}</option>)}
+              {LEVELS.map((l) => <option key={l} value={l}>{levelLabel(l)}</option>)}
             </Select>
           </Field>
           <Field label="Term system" error={errors.termSystem?.message}>
@@ -514,6 +617,10 @@ function SchemesTab() {
   const [deleting, setDeleting] = useState<ExamBoardScheme | null>(null);
   const [managing, setManaging] = useState<ExamBoardScheme | null>(null);
   const [courseFilter, setCourseFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
   const { data: courses = [] } = useQuery({ queryKey: ['eb-courses'], queryFn: ExamBoardApi.listCourses });
   const { data: schemes = [], isLoading } = useQuery({
     queryKey: ['eb-schemes', courseFilter],
@@ -522,6 +629,21 @@ function SchemesTab() {
   const { data: years = [] } = useQuery({ queryKey: ['eb-academic-years'], queryFn: ExamBoardApi.listAcademicYears });
   const courseName = (id: string) => courses.find((c) => c.id === id)?.name ?? id;
   const yearName = (id: string | null) => (id ? years.find((y) => y.id === id)?.name ?? id : '—');
+
+  useEffect(() => {
+    setPage(1);
+  }, [courseFilter, search, statusFilter, limit]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return schemes.filter((s) => {
+      if (q && !s.name.toLowerCase().includes(q) && !(s.code ?? '').toLowerCase().includes(q)) return false;
+      if (statusFilter && String(s.isActive) !== statusFilter) return false;
+      return true;
+    });
+  }, [schemes, search, statusFilter]);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / limit));
+  const pageRows = filtered.slice((page - 1) * limit, page * limit);
 
   const save = useMutation({
     mutationFn: (p: CreateExamBoardSchemePayload) =>
@@ -567,15 +689,32 @@ function SchemesTab() {
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <Select
-          value={courseFilter}
-          onChange={(e) => setCourseFilter(e.target.value)}
-          className="max-w-xs"
-        >
-          <option value="">All courses</option>
-          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </Select>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              placeholder="Search by name or code"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-md border border-slate-200 py-1.5 pl-9 pr-3 text-sm"
+            />
+          </div>
+          <Select
+            value={courseFilter}
+            onChange={(e) => setCourseFilter(e.target.value)}
+            className="max-w-xs"
+          >
+            <option value="">All courses</option>
+            {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </Select>
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="max-w-[9rem]">
+            <option value="">All statuses</option>
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </Select>
+        </div>
         <button className="btn-primary" onClick={openCreate} disabled={courses.length === 0}>
           <Plus className="mr-1.5 h-4 w-4" /> Add scheme
         </button>
@@ -586,11 +725,12 @@ function SchemesTab() {
         </div>
       )}
       <DataTable<ExamBoardScheme>
-        rows={schemes}
+        rows={pageRows}
         getRowId={(r) => r.id}
         isLoading={isLoading}
-        emptyMessage="No schemes yet."
+        emptyMessage={search || statusFilter ? 'No schemes match these filters.' : 'No schemes yet.'}
         columns={[
+          { key: 'sno', header: 'S.No', render: (s) => (page - 1) * limit + pageRows.findIndex((r) => r.id === s.id) + 1 },
           { key: 'name', header: 'Scheme', render: (s) => (
             <div className="leading-tight">
               <div className="font-medium text-slate-900">{s.name}</div>
@@ -617,6 +757,8 @@ function SchemesTab() {
           </>
         )}
       />
+
+      <Pagination page={page} totalPages={totalPages} total={filtered.length} limit={limit} onPageChange={setPage} onLimitChange={setLimit} />
 
       <ConfirmDialog
         open={!!deleting}
@@ -1349,6 +1491,7 @@ const batchEditSchema = z.object({
   name: z.string().min(1, 'Required'),
   code: z.string().optional().or(z.literal('')),
   capacity: optionalNumber(1),
+  currentTermNumber: z.coerce.number().min(1),
   status: z.enum(['active', 'closed']),
 });
 type BatchEditForm = z.infer<typeof batchEditSchema>;
@@ -1365,6 +1508,10 @@ function EditBatchModal({
     queryKey: ['eb-schemes', batch.examBoardCourseId],
     queryFn: () => ExamBoardApi.listSchemes(batch.examBoardCourseId),
   });
+  const { data: terms = [] } = useQuery<CourseTerm[]>({
+    queryKey: ['eb-course-terms', batch.examBoardCourseId],
+    queryFn: () => ExamBoardApi.listCourseTerms(batch.examBoardCourseId),
+  });
   const saveEdit = useMutation({
     mutationFn: (v: BatchEditForm) =>
       ExamBoardApi.updateBatch(batch.id, {
@@ -1372,6 +1519,7 @@ function EditBatchModal({
         name: v.name,
         code: v.code || undefined,
         capacity: v.capacity,
+        currentTermNumber: v.currentTermNumber,
         status: v.status,
       }),
     onSuccess: () => {
@@ -1389,6 +1537,7 @@ function EditBatchModal({
       name: batch.name,
       code: batch.code ?? '',
       capacity: batch.capacity ?? undefined,
+      currentTermNumber: batch.currentTermNumber ?? 1,
       status: batch.status,
     },
   });
@@ -1428,6 +1577,11 @@ function EditBatchModal({
         <Field label="Capacity" error={editForm.formState.errors.capacity?.message}>
           <Input type="number" min={1} {...editForm.register('capacity')} />
         </Field>
+        <Field label="Current term" error={editForm.formState.errors.currentTermNumber?.message}>
+          <Select {...editForm.register('currentTermNumber')}>
+            {terms.map((t) => <option key={t.number} value={t.number}>{t.label}</option>)}
+          </Select>
+        </Field>
         <Field label="Status" error={editForm.formState.errors.status?.message}>
           <Select {...editForm.register('status')}>
             <option value="active">active</option>
@@ -1445,6 +1599,7 @@ function BatchesTab() {
   const [open, setOpen] = useState(false);
   const [editingBatch, setEditingBatch] = useState<ExamBoardBatch | null>(null);
   const [manageBatch, setManageBatch] = useState<ExamBoardBatch | null>(null);
+  const [schedulingExam, setSchedulingExam] = useState<ExamBoardBatch | null>(null);
   const [deleting, setDeleting] = useState<ExamBoardBatch | null>(null);
   const [schoolFilter, setSchoolFilter] = useState('');
   const { data: batches = [], isLoading } = useQuery({
@@ -1545,8 +1700,11 @@ function BatchesTab() {
           ) },
           { key: 'school', header: 'Institution', render: (b) => schoolName(b.schoolId) },
           { key: 'course', header: 'Course', render: (b) => courseName(b.examBoardCourseId) },
-          { key: 'year', header: 'Academic Year', render: (b) => yearName(b.examBoardAcademicYearId) },
+          { key: 'year', header: 'Batch Starting Academic Year', render: (b) => yearName(b.examBoardAcademicYearId) },
           { key: 'capacity', header: 'Capacity', render: (b) => b.capacity ?? '—' },
+          { key: 'currentTerm', header: 'Current term', render: (b) => (
+            <Badge tone="blue">Term {b.currentTermNumber ?? 1}</Badge>
+          ) },
           { key: 'status', header: 'Status', render: (b) => (
             <Badge tone={b.status === 'active' ? 'green' : 'slate'}>{b.status}</Badge>
           ) },
@@ -1566,6 +1724,13 @@ function BatchesTab() {
               onClick={() => setManageBatch(b)}
             >
               <Settings2 className="h-4 w-4" />
+            </button>
+            <button
+              className="rounded-md p-1.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+              title={`Schedule exam (current term: ${b.currentTermNumber ?? 1})`}
+              onClick={() => setSchedulingExam(b)}
+            >
+              <CalendarPlus className="h-4 w-4" />
             </button>
             <button
               className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
@@ -1590,6 +1755,10 @@ function BatchesTab() {
 
       {editingBatch && (
         <EditBatchModal batch={editingBatch} onClose={() => setEditingBatch(null)} />
+      )}
+
+      {schedulingExam && (
+        <QuickScheduleExamModal batch={schedulingExam} onClose={() => setSchedulingExam(null)} />
       )}
 
       <Modal
@@ -1627,7 +1796,7 @@ function BatchesTab() {
               {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </Select>
           </Field>
-          <Field label="Academic Year" required error={errors.examBoardAcademicYearId?.message}>
+          <Field label="Batch Starting Academic Year" required error={errors.examBoardAcademicYearId?.message}>
             <Select {...register('examBoardAcademicYearId')}>
               <option value="">Select year…</option>
               {years.map((y) => <option key={y.id} value={y.id}>{y.name}</option>)}
@@ -1920,7 +2089,7 @@ export function BatchDetailPage() {
             <div className="text-sm font-medium text-slate-900">{courseName(batch.examBoardCourseId)}</div>
           </div>
           <div>
-            <div className="text-xs text-slate-500">Academic Year</div>
+            <div className="text-xs text-slate-500">Batch Starting Academic Year</div>
             <div className="text-sm font-medium text-slate-900">{yearName(batch.examBoardAcademicYearId)}</div>
           </div>
           <div>
@@ -1936,6 +2105,10 @@ export function BatchDetailPage() {
             <div className="text-sm font-medium text-slate-900">{batch.capacity ?? '—'}</div>
           </div>
           <div>
+            <div className="text-xs text-slate-500">Current term</div>
+            <Badge tone="blue">Term {batch.currentTermNumber ?? 1}</Badge>
+          </div>
+          <div>
             <div className="text-xs text-slate-500">Status</div>
             <Badge tone={batch.status === 'active' ? 'green' : 'slate'}>{batch.status}</Badge>
           </div>
@@ -1948,7 +2121,12 @@ export function BatchDetailPage() {
       {batch && tab === 'students' && (
         <BatchStudentsTab batchId={batch.id} institutions={institutions} />
       )}
-      {batch && tab === 'exams' && <BatchExamsTab batch={batch} />}
+      {batch && tab === 'exams' && (
+        <BatchExamsScheduler
+          batch={batch}
+          context={{ collegeName: schoolName(batch.schoolId), courseName: courseName(batch.examBoardCourseId), batchName: batch.name }}
+        />
+      )}
     </>
   );
 }
@@ -2002,6 +2180,13 @@ function BatchStudentsTab({
 }) {
   const navigate = useNavigate();
   const [schoolFilter, setSchoolFilter] = useState('');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(100);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, limit]);
 
   const { data: enrollments = [], isLoading: enrollLoading } = useQuery({
     queryKey: ['eb-batch-enrollments', batchId],
@@ -2018,10 +2203,35 @@ function BatchStudentsTab({
     enabled: !!schoolFilter,
   });
 
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return enrollments;
+    return enrollments.filter(
+      (e) =>
+        (e.student?.studentName ?? '').toLowerCase().includes(q) ||
+        (e.student?.admissionNumber ?? '').toLowerCase().includes(q),
+    );
+  }, [enrollments, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / limit));
+  const pageRows = filtered.slice((page - 1) * limit, page * limit);
+
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <div className="text-sm text-slate-500">{enrollments.length} student(s) enrolled</div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-64">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              type="search"
+              placeholder="Search by name or admission #"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full rounded-md border border-slate-200 py-1.5 pl-9 pr-3 text-sm"
+            />
+          </div>
+          <div className="text-sm text-slate-500">{filtered.length} student(s) enrolled</div>
+        </div>
         <Select
           value={schoolFilter}
           onChange={(e) => setSchoolFilter(e.target.value)}
@@ -2059,11 +2269,12 @@ function BatchStudentsTab({
       )}
 
       <DataTable<ExamBoardEnrollment>
-        rows={enrollments}
+        rows={pageRows}
         getRowId={(r) => r.id}
         isLoading={enrollLoading}
-        emptyMessage="No students enrolled in this batch yet."
+        emptyMessage={search ? 'No students match your search.' : 'No students enrolled in this batch yet.'}
         columns={[
+          { key: 'sno', header: 'S.No', render: (e) => (page - 1) * limit + pageRows.findIndex((r) => r.id === e.id) + 1 },
           { key: 'admissionNumber', header: 'Admission #', render: (e) => (
             <code className="text-xs">{e.student?.admissionNumber ?? '—'}</code>
           ) },
@@ -2073,23 +2284,52 @@ function BatchStudentsTab({
           { key: 'enrollmentDate', header: 'Enrolled on', render: (e) => formatDate(e.enrollmentDate) },
         ]}
       />
+
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={filtered.length}
+        limit={limit}
+        onPageChange={setPage}
+        onLimitChange={setLimit}
+      />
     </div>
   );
 }
 
 // ── Exams (org can schedule directly, on behalf of any institution) ──────────
 const ORG_EXAM_TYPES = ['unit_test', 'mid_term', 'final', 'quarterly', 'half_yearly'] as const;
+const ORG_EXAM_CATEGORIES = ['regular', 'supplementary'] as const;
+const ORG_EXAM_STATUSES = ['draft', 'scheduled', 'ongoing', 'completed'] as const;
 const batchExamSchema = z.object({
   termNumber: z.coerce.number().min(1, 'Required'),
   name: z.string().min(1, 'Required'),
   examType: z.enum(ORG_EXAM_TYPES),
+  examCategory: z.enum(ORG_EXAM_CATEGORIES),
+  status: z.enum(ORG_EXAM_STATUSES),
   startDate: z.string().min(1, 'Required'),
   endDate: z.string().min(1, 'Required'),
 });
 type BatchExamForm = z.infer<typeof batchExamSchema>;
 
 function ExamsTab() {
-  const [batchId, setBatchId] = useState('');
+  const navigate = useNavigate();
+  const [batchFilter, setBatchFilter] = useState('');
+  const [termFilter, setTermFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [schedulingBatchId, setSchedulingBatchId] = useState('');
+  const [viewingSubjects, setViewingSubjects] = useState<OrgExamRow | null>(null);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
+
+  useEffect(() => {
+    setPage(1);
+  }, [batchFilter, termFilter, typeFilter, categoryFilter, statusFilter, dateFrom, dateTo, limit]);
+
   const { data: institutions = [] } = useQuery({
     queryKey: ['eb-institutions'],
     queryFn: ExamBoardApi.listInstitutions,
@@ -2101,31 +2341,148 @@ function ExamsTab() {
   const { data: courses = [] } = useQuery({ queryKey: ['eb-courses'], queryFn: ExamBoardApi.listCourses });
   const schoolName = (id: string) => institutions.find((i) => i.school.id === id)?.school.name ?? id;
   const courseName = (id: string) => courses.find((c) => c.id === id)?.name ?? id;
-  const batch = batches.find((b) => b.id === batchId) ?? null;
+  const schedulingBatch = batches.find((b) => b.id === schedulingBatchId) ?? null;
+
+  const { data: exams = [], isLoading } = useQuery({
+    queryKey: ['eb-org-exams', batchFilter, termFilter, typeFilter, categoryFilter, statusFilter, dateFrom, dateTo],
+    queryFn: () =>
+      ExamBoardApi.listOrgExams({
+        examBoardBatchId: batchFilter || undefined,
+        termNumber: termFilter ? Number(termFilter) : undefined,
+        examType: typeFilter || undefined,
+        examCategory: categoryFilter || undefined,
+        status: statusFilter || undefined,
+        dateFrom: dateFrom || undefined,
+        dateTo: dateTo || undefined,
+      }),
+  });
+
+  const totalPages = Math.max(1, Math.ceil(exams.length / limit));
+  const pageRows = exams.slice((page - 1) * limit, page * limit);
 
   return (
     <div>
-      <div className="mb-4">
-        <SearchSelect
-          className="max-w-md"
-          placeholder="Select a batch to schedule exams for…"
-          value={batchId}
-          onChange={setBatchId}
-          options={batches.map((b) => ({
-            value: b.id,
-            label: b.name,
-            sublabel: `${schoolName(b.schoolId)} · ${courseName(b.examBoardCourseId)}`,
-          }))}
-        />
-      </div>
-      {!batch ? (
-        <div className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          Select a batch above to schedule and print its exams.
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-wrap items-end gap-2">
+          <Field label="Batch" className="w-56">
+            <SearchSelect
+              placeholder="All batches"
+              value={batchFilter}
+              onChange={setBatchFilter}
+              options={batches.map((b) => ({
+                value: b.id,
+                label: b.name,
+                sublabel: `${schoolName(b.schoolId)} · ${courseName(b.examBoardCourseId)}`,
+              }))}
+            />
+          </Field>
+          <Field label="Term #" className="w-24">
+            <Input type="number" min={1} value={termFilter} onChange={(e) => setTermFilter(e.target.value)} placeholder="Any" />
+          </Field>
+          <Field label="Type" className="w-40">
+            <Select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
+              <option value="">All types</option>
+              {ORG_EXAM_TYPES.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+            </Select>
+          </Field>
+          <Field label="Category" className="w-40">
+            <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <option value="">All categories</option>
+              {ORG_EXAM_CATEGORIES.map((c) => <option key={c} value={c}>{c === 'supplementary' ? 'Supplementary' : 'Regular'}</option>)}
+            </Select>
+          </Field>
+          <Field label="Status" className="w-36">
+            <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+              <option value="">All statuses</option>
+              {ORG_EXAM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </Select>
+          </Field>
+          <Field label="From" className="w-40">
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+          </Field>
+          <Field label="To" className="w-40">
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          </Field>
         </div>
-      ) : (
-        <BatchExamsScheduler
-          batch={batch}
-          context={{ collegeName: schoolName(batch.schoolId), courseName: courseName(batch.examBoardCourseId), batchName: batch.name }}
+        <button className="btn-primary" onClick={() => setSchedulingBatchId('__pick__')}>
+          <Plus className="mr-1.5 h-4 w-4" /> Schedule exam
+        </button>
+      </div>
+
+      <DataTable<OrgExamRow>
+        rows={pageRows}
+        getRowId={(r) => r.id}
+        isLoading={isLoading}
+        emptyMessage="No exams match these filters."
+        columns={[
+          { key: 'sno', header: 'S.No', render: (e) => (page - 1) * limit + pageRows.findIndex((r) => r.id === e.id) + 1 },
+          { key: 'name', header: 'Exam', render: (e) => (
+            <div className="leading-tight">
+              <div className="font-medium text-slate-900">{e.name}</div>
+              <span className="text-xs text-slate-500">{e.batchName} · {schoolName(e.schoolId)}</span>
+            </div>
+          ) },
+          { key: 'term', header: 'Term', render: (e) => `Term ${e.termNumber}` },
+          { key: 'type', header: 'Type', render: (e) => e.examType.replace('_', ' ') },
+          { key: 'category', header: 'Category', render: (e) => (
+            <Badge tone={e.examCategory === 'supplementary' ? 'amber' : 'slate'}>
+              {e.examCategory === 'supplementary' ? 'Supplementary' : 'Regular'}
+            </Badge>
+          ) },
+          { key: 'dates', header: 'Dates', render: (e) => `${formatDate(e.startDate)} – ${formatDate(e.endDate)}` },
+          { key: 'status', header: 'Status', render: (e) => (
+            <Badge tone={e.status === 'completed' ? 'green' : e.status === 'ongoing' ? 'amber' : 'slate'}>
+              {e.status}
+            </Badge>
+          ) },
+        ]}
+        actions={(e) => (
+          <>
+            <button className="btn-secondary !py-1 !px-2.5 text-xs" onClick={() => setViewingSubjects(e)}>
+              Subject-wise schedule / Print
+            </button>
+            <button
+              className="rounded-md p-1.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
+              title="Open batch"
+              onClick={() => navigate(`/org/exam-board/batches/${e.examBoardBatchId}`)}
+            >
+              <ArrowLeft className="h-4 w-4 rotate-180" />
+            </button>
+          </>
+        )}
+      />
+
+      <Pagination page={page} totalPages={totalPages} total={exams.length} limit={limit} onPageChange={setPage} onLimitChange={setLimit} />
+
+      {schedulingBatchId === '__pick__' && (
+        <Modal open onClose={() => setSchedulingBatchId('')} title="Schedule exam" description="Pick a batch to schedule an exam for.">
+          <SearchSelect
+            placeholder="Select a batch…"
+            value=""
+            onChange={(id) => setSchedulingBatchId(id)}
+            options={batches.map((b) => ({
+              value: b.id,
+              label: b.name,
+              sublabel: `${schoolName(b.schoolId)} · ${courseName(b.examBoardCourseId)}`,
+            }))}
+          />
+        </Modal>
+      )}
+      {schedulingBatch && (
+        <QuickScheduleExamModal batch={schedulingBatch} onClose={() => setSchedulingBatchId('')} />
+      )}
+
+      {viewingSubjects && (
+        <ExamSubjectScheduleModal
+          batchId={viewingSubjects.examBoardBatchId}
+          exam={viewingSubjects}
+          onClose={() => setViewingSubjects(null)}
+          context={{
+            collegeName: schoolName(viewingSubjects.schoolId),
+            courseName: courseName(viewingSubjects.examBoardCourseId),
+            batchName: viewingSubjects.batchName,
+            termLabel: `Term ${viewingSubjects.termNumber}`,
+          }}
         />
       )}
     </div>
@@ -2153,7 +2510,7 @@ function BatchExamsScheduler({
     queryFn: () => ExamBoardApi.listBatchExams(batch.id),
   });
 
-  const currentTerm = activeTerm ?? terms[0]?.number;
+  const currentTerm = activeTerm ?? batch.currentTermNumber ?? terms[0]?.number;
   const currentTermLabel = terms.find((t) => t.number === currentTerm)?.label;
   const examsForTerm = exams.filter((e) => e.termNumber === currentTerm);
 
@@ -2167,34 +2524,50 @@ function BatchExamsScheduler({
     onError: (e) => toast.error(errMsg(e)),
   });
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<BatchExamForm>({
+  const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<BatchExamForm>({
     resolver: zodResolver(batchExamSchema),
-    values: { termNumber: currentTerm ?? 1, name: '', examType: 'unit_test', startDate: '', endDate: '' },
+    values: {
+      termNumber: currentTerm ?? 1,
+      name: '',
+      examType: 'unit_test',
+      examCategory: 'regular',
+      status: 'scheduled',
+      startDate: '',
+      endDate: '',
+    },
   });
+  const formCategory = watch('examCategory');
+  const batchCurrentTerm = batch.currentTermNumber ?? terms[0]?.number ?? 1;
+  useEffect(() => {
+    if (formCategory === 'regular') setValue('termNumber', batchCurrentTerm);
+  }, [formCategory, batchCurrentTerm, setValue]);
 
   return (
     <div>
       {terms.length > 0 && (
-        <div className="mb-4 flex items-center justify-between gap-3 border-b border-slate-200">
-          <nav className="-mb-px flex flex-wrap gap-1">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <nav className="inline-flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
             {terms.map((t) => {
               const isActive = currentTerm === t.number;
               return (
                 <button
                   key={t.number}
                   onClick={() => setActiveTerm(t.number)}
-                  className={`border-b-2 px-3 pb-2.5 text-sm font-medium ${
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                     isActive
-                      ? 'border-brand-500 text-brand-700'
-                      : 'border-transparent text-slate-500 hover:text-slate-700'
+                      ? 'bg-white text-brand-700 shadow-sm'
+                      : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   {t.label}
+                  {batch.currentTermNumber === t.number && (
+                    <span className="ml-1.5 text-xs text-brand-500">•</span>
+                  )}
                 </button>
               );
             })}
           </nav>
-          <button className="btn-primary mb-2" onClick={() => setOpen(true)}>
+          <button className="btn-primary" onClick={() => setOpen(true)}>
             <Plus className="mr-1.5 h-4 w-4" /> Schedule exam
           </button>
         </div>
@@ -2208,6 +2581,11 @@ function BatchExamsScheduler({
         columns={[
           { key: 'name', header: 'Exam', render: (e) => e.name },
           { key: 'type', header: 'Type', render: (e) => e.examType.replace('_', ' ') },
+          { key: 'category', header: 'Category', render: (e) => (
+            <Badge tone={e.examCategory === 'supplementary' ? 'amber' : 'slate'}>
+              {e.examCategory === 'supplementary' ? 'Supplementary' : 'Regular'}
+            </Badge>
+          ) },
           { key: 'dates', header: 'Dates', render: (e) => `${formatDate(e.startDate)} – ${formatDate(e.endDate)}` },
           { key: 'status', header: 'Status', render: (e) => (
             <Badge tone={e.status === 'completed' ? 'green' : e.status === 'ongoing' ? 'amber' : 'slate'}>
@@ -2235,18 +2613,40 @@ function BatchExamsScheduler({
           </>
         }
       >
-        <form className="grid grid-cols-1 gap-4">
-          <Field label="Term" required error={errors.termNumber?.message}>
-            <Select {...register('termNumber')}>
-              {terms.map((t) => <option key={t.number} value={t.number}>{t.label}</option>)}
+        <form className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <Field label="Category" error={errors.examCategory?.message}>
+            <Select {...register('examCategory')}>
+              {ORG_EXAM_CATEGORIES.map((c) => <option key={c} value={c}>{c === 'supplementary' ? 'Supplementary' : 'Regular'}</option>)}
             </Select>
           </Field>
-          <Field label="Exam name" required error={errors.name?.message}>
+          <Field
+            label="Term"
+            required
+            error={errors.termNumber?.message}
+            hint={formCategory === 'regular' ? "Regular exams use the batch's current term." : undefined}
+          >
+            <Select
+              {...register('termNumber')}
+              className={formCategory === 'regular' ? 'cursor-not-allowed bg-slate-50 text-slate-500' : undefined}
+              onKeyDown={(e) => { if (formCategory === 'regular') e.preventDefault(); }}
+              onMouseDown={(e) => { if (formCategory === 'regular') e.preventDefault(); }}
+            >
+              {(formCategory === 'regular' ? terms.filter((t) => t.number === batchCurrentTerm) : terms).map((t) => (
+                <option key={t.number} value={t.number}>{t.label}</option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Exam name" required error={errors.name?.message} className="sm:col-span-2">
             <Input {...register('name')} placeholder="Semester 1 Final" />
           </Field>
           <Field label="Type" error={errors.examType?.message}>
             <Select {...register('examType')}>
               {ORG_EXAM_TYPES.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+            </Select>
+          </Field>
+          <Field label="Status" error={errors.status?.message}>
+            <Select {...register('status')}>
+              {ORG_EXAM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
             </Select>
           </Field>
           <Field label="Start date" required error={errors.startDate?.message}>
@@ -2270,75 +2670,107 @@ function BatchExamsScheduler({
   );
 }
 
-function BatchExamsTab({ batch }: { batch: ExamBoardBatch }) {
-  const [activeTerm, setActiveTerm] = useState<number | null>(null);
-  const [viewingSubjects, setViewingSubjects] = useState<ExamBoardExam | null>(null);
-
+/** One-click "Schedule exam" from the Batches list — no navigation, defaults to the batch's current term. */
+function QuickScheduleExamModal({
+  batch,
+  onClose,
+}: {
+  batch: ExamBoardBatch;
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
   const { data: terms = [] } = useQuery<CourseTerm[]>({
     queryKey: ['eb-course-terms', batch.examBoardCourseId],
     queryFn: () => ExamBoardApi.listCourseTerms(batch.examBoardCourseId),
   });
-  const { data: exams = [], isLoading } = useQuery({
-    queryKey: ['eb-batch-exams', batch.id],
-    queryFn: () => ExamBoardApi.listBatchExams(batch.id),
+
+  const create = useMutation({
+    mutationFn: (p: CreateBatchExamPayload) => ExamBoardApi.createBatchExam(batch.id, p),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['eb-batch-exams', batch.id] });
+      toast.success('Exam scheduled');
+      onClose();
+    },
+    onError: (e) => toast.error(errMsg(e)),
   });
 
-  const currentTerm = activeTerm ?? terms[0]?.number;
-  const examsForTerm = exams.filter((e) => e.termNumber === currentTerm);
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<BatchExamForm>({
+    resolver: zodResolver(batchExamSchema),
+    values: {
+      termNumber: batch.currentTermNumber ?? 1,
+      name: '',
+      examType: 'unit_test',
+      examCategory: 'regular',
+      status: 'scheduled',
+      startDate: '',
+      endDate: '',
+    },
+  });
+  const formCategory = watch('examCategory');
+  const batchCurrentTerm = batch.currentTermNumber ?? terms[0]?.number ?? 1;
+  useEffect(() => {
+    if (formCategory === 'regular') setValue('termNumber', batchCurrentTerm);
+  }, [formCategory, batchCurrentTerm, setValue]);
 
   return (
-    <div>
-      {terms.length > 0 && (
-        <nav className="mb-4 inline-flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1">
-          {terms.map((t) => {
-            const isActive = currentTerm === t.number;
-            return (
-              <button
-                key={t.number}
-                onClick={() => setActiveTerm(t.number)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  isActive
-                    ? 'bg-white text-brand-700 shadow-sm'
-                    : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                {t.label}
-              </button>
-            );
-          })}
-        </nav>
-      )}
-
-      <DataTable<ExamBoardExam>
-        rows={examsForTerm}
-        getRowId={(r) => r.id}
-        isLoading={isLoading}
-        emptyMessage="No exams scheduled for this term yet. The college schedules exams from its Examination Board module."
-        columns={[
-          { key: 'name', header: 'Exam', render: (e) => e.name },
-          { key: 'type', header: 'Type', render: (e) => e.examType.replace('_', ' ') },
-          { key: 'dates', header: 'Dates', render: (e) => `${formatDate(e.startDate)} – ${formatDate(e.endDate)}` },
-          { key: 'status', header: 'Status', render: (e) => (
-            <Badge tone={e.status === 'completed' ? 'green' : e.status === 'ongoing' ? 'amber' : 'slate'}>
-              {e.status}
-            </Badge>
-          ) },
-        ]}
-        actions={(e) => (
-          <button className="btn-secondary !py-1 !px-2.5 text-xs" onClick={() => setViewingSubjects(e)}>
-            Subject-wise schedule
+    <Modal
+      open
+      onClose={onClose}
+      title={`Schedule exam — ${batch.name}`}
+      description="Defaults to this batch's current term."
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
+          <button type="button" className="btn-primary" onClick={handleSubmit((v) => create.mutate(v))} disabled={create.isPending}>
+            {create.isPending ? 'Scheduling…' : 'Schedule'}
           </button>
-        )}
-      />
-
-      {viewingSubjects && (
-        <ExamSubjectScheduleModal
-          batchId={batch.id}
-          exam={viewingSubjects}
-          onClose={() => setViewingSubjects(null)}
-        />
-      )}
-    </div>
+        </>
+      }
+    >
+      <form className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Category" error={errors.examCategory?.message}>
+          <Select {...register('examCategory')}>
+            {ORG_EXAM_CATEGORIES.map((c) => <option key={c} value={c}>{c === 'supplementary' ? 'Supplementary' : 'Regular'}</option>)}
+          </Select>
+        </Field>
+        <Field
+          label="Term"
+          required
+          error={errors.termNumber?.message}
+          hint={formCategory === 'regular' ? "Regular exams use the batch's current term." : undefined}
+        >
+          <Select
+            {...register('termNumber')}
+            className={formCategory === 'regular' ? 'cursor-not-allowed bg-slate-50 text-slate-500' : undefined}
+            onKeyDown={(e) => { if (formCategory === 'regular') e.preventDefault(); }}
+            onMouseDown={(e) => { if (formCategory === 'regular') e.preventDefault(); }}
+          >
+            {(formCategory === 'regular' ? terms.filter((t) => t.number === batchCurrentTerm) : terms).map((t) => (
+              <option key={t.number} value={t.number}>{t.label}</option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Exam name" required error={errors.name?.message} className="sm:col-span-2">
+          <Input {...register('name')} placeholder="Semester 1 Final" />
+        </Field>
+        <Field label="Type" error={errors.examType?.message}>
+          <Select {...register('examType')}>
+            {ORG_EXAM_TYPES.map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+          </Select>
+        </Field>
+        <Field label="Status" error={errors.status?.message}>
+          <Select {...register('status')}>
+            {ORG_EXAM_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </Select>
+        </Field>
+        <Field label="Start date" required error={errors.startDate?.message}>
+          <Input type="date" {...register('startDate')} />
+        </Field>
+        <Field label="End date" required error={errors.endDate?.message}>
+          <Input type="date" {...register('endDate')} />
+        </Field>
+      </form>
+    </Modal>
   );
 }
 

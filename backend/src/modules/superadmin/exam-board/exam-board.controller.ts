@@ -419,6 +419,36 @@ export class ExamBoardController {
     return this.svc.listBatchEnrollments(this.orgId(req), id);
   }
 
+  @Get('exams')
+  @ApiQuery({ name: 'examBoardBatchId', required: false })
+  @ApiQuery({ name: 'termNumber', required: false })
+  @ApiQuery({ name: 'examType', required: false })
+  @ApiQuery({ name: 'examCategory', required: false })
+  @ApiQuery({ name: 'status', required: false })
+  @ApiQuery({ name: 'dateFrom', required: false })
+  @ApiQuery({ name: 'dateTo', required: false })
+  @ApiOperation({ summary: 'List every exam across every batch in the org, with optional filters' })
+  listOrgExams(
+    @Req() req: Request,
+    @Query('examBoardBatchId') examBoardBatchId?: string,
+    @Query('termNumber') termNumber?: string,
+    @Query('examType') examType?: string,
+    @Query('examCategory') examCategory?: string,
+    @Query('status') status?: string,
+    @Query('dateFrom') dateFrom?: string,
+    @Query('dateTo') dateTo?: string,
+  ) {
+    return this.svc.listOrgExams(this.orgId(req), {
+      examBoardBatchId,
+      termNumber: termNumber ? Number(termNumber) : undefined,
+      examType,
+      examCategory,
+      status,
+      dateFrom,
+      dateTo,
+    });
+  }
+
   @Get('batches/:id/exams')
   @ApiOperation({ summary: 'List exams scheduled for a batch' })
   listBatchExams(@Req() req: Request, @Param('id') id: string) {

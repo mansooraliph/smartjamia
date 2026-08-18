@@ -3,13 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, KeyRound, History, Trash2, X } from 'lucide-react';
-import { OrgUser, OrgUsersApi, CreateOrgUserPayload } from '@/services/orgUsers.api';
+import { Plus, KeyRound, History, Trash2, X, Shield } from 'lucide-react';
+import { OrgAdmin, OrgUser, OrgUsersApi, CreateOrgAdminPayload, CreateOrgUserPayload } from '@/services/orgUsers.api';
 import { OrgPortalApi } from '@/services/org.api';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Field, Input, Select } from '@/components/ui/Input';
 import { formatDate, formatDateTime } from '@/lib/format';
 import { toast } from '@/stores/toast.store';
@@ -65,6 +66,9 @@ export function UsersPage() {
         description="Every user across your organization's schools, with cross-school access."
       />
 
+      <OrgAdminsSection />
+
+      <h2 className="mb-3 mt-6 text-base font-semibold text-slate-900">School users</h2>
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <Select value={schoolFilter} onChange={(e) => setSchoolFilter(e.target.value)} className="max-w-xs">
           <option value="">All schools</option>
@@ -157,6 +161,132 @@ export function UsersPage() {
         <ManageAccessModal user={manageFor} schools={schools} onClose={() => setManageFor(null)} />
       )}
     </>
+  );
+}
+
+// ── Organization-level admins ─────────────────────────────────────────────────
+// Distinct from school users above: these accounts log in at /org/login and
+// manage the whole org, not scoped to a single school.
+const createOrgAdminSchema = z.object({
+  name: z.string().min(1, 'Required'),
+  email: z.string().email('Invalid email'),
+  password: z.string().min(8, 'Min 8 characters'),
+});
+type CreateOrgAdminForm = z.infer<typeof createOrgAdminSchema>;
+
+function OrgAdminsSection() {
+  const qc = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [deleting, setDeleting] = useState<OrgAdmin | null>(null);
+
+  const { data: orgAdmins = [], isLoading } = useQuery({
+    queryKey: ['org-admins'],
+    queryFn: OrgUsersApi.listOrgAdmins,
+  });
+
+  const create = useMutation({
+    mutationFn: (p: CreateOrgAdminPayload) => OrgUsersApi.createOrgAdmin(p),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-admins'] });
+      setCreateOpen(false);
+      toast.success('Organization admin created');
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => OrgUsersApi.removeOrgAdmin(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['org-admins'] });
+      setDeleting(null);
+      toast.success('Organization admin removed');
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateOrgAdminForm>({
+    resolver: zodResolver(createOrgAdminSchema),
+    values: { name: '', email: '', password: '' },
+  });
+
+  return (
+    <div>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-1.5 text-base font-semibold text-slate-900">
+          <Shield className="h-4 w-4 text-brand-600" /> Organization admins
+        </h2>
+        <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" /> Create org admin
+        </button>
+      </div>
+      <p className="mb-3 text-sm text-slate-500">
+        Org-level accounts sign in at the organization login and manage every school &mdash; not scoped to one school.
+      </p>
+      <DataTable<OrgAdmin>
+        rows={orgAdmins}
+        getRowId={(r) => r.id}
+        isLoading={isLoading}
+        emptyMessage="No organization admins yet."
+        columns={[
+          { key: 'name', header: 'Name', render: (a) => (
+            <div className="leading-tight">
+              <div className="font-medium text-slate-900">{a.name}</div>
+              <div className="text-xs text-slate-500">{a.email}</div>
+            </div>
+          ) },
+          { key: 'status', header: 'Status', render: (a) => (
+            <Badge tone={a.status === 'active' ? 'green' : 'slate'}>{a.status}</Badge>
+          ) },
+          { key: 'created', header: 'Created', render: (a) => formatDate(a.createdAt) },
+        ]}
+        actions={(a) => (
+          <button
+            className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
+            title="Remove"
+            onClick={() => setDeleting(a)}
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      />
+
+      <ConfirmDialog
+        open={!!deleting}
+        onClose={() => setDeleting(null)}
+        onConfirm={() => deleting && remove.mutate(deleting.id)}
+        loading={remove.isPending}
+        title="Remove organization admin?"
+        message={`Remove "${deleting?.name}". They will no longer be able to sign in.`}
+        confirmText="Remove"
+      />
+
+      <Modal
+        open={createOpen}
+        onClose={() => { reset(); setCreateOpen(false); }}
+        title="Create organization admin"
+        description="This account gets full access to the organization portal, across every school."
+        footer={
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setCreateOpen(false)}>Cancel</button>
+            <button type="button" className="btn-primary" onClick={handleSubmit((v) => create.mutate(v))} disabled={create.isPending}>
+              {create.isPending ? 'Creating…' : 'Create org admin'}
+            </button>
+          </>
+        }
+      >
+        <form className="grid grid-cols-1 gap-4">
+          <Field label="Name" required error={errors.name?.message}>
+            <Input {...register('name')} placeholder="Ramesh Kumar" />
+          </Field>
+          <Field label="Email" required error={errors.email?.message}>
+            <Input type="email" {...register('email')} placeholder="ramesh@org.test" />
+          </Field>
+          <Field label="Password" required error={errors.password?.message}>
+            <Input type="password" {...register('password')} placeholder="Min 8 characters" />
+          </Field>
+        </form>
+      </Modal>
+    </div>
   );
 }
 

@@ -11,9 +11,14 @@ import {
   School as SchoolIcon,
   Link2,
   Unlink,
+  UserCog,
+  KeyRound,
 } from 'lucide-react';
 import {
+  CreateOrgAdminPayload,
   CreateSchoolPayload,
+  OrgAdmin,
+  OrgAdminsApi,
   Organization,
   OrganizationsApi,
   School,
@@ -23,8 +28,10 @@ import { DataTable } from '@/components/ui/DataTable';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { Tabs } from '@/components/ui/Tabs';
 import { Field, Input, Select } from '@/components/ui/Input';
 import { formatDate } from '@/lib/format';
+import { toast } from '@/stores/toast.store';
 
 const SCHOOL_STATUSES = [
   'trial',
@@ -49,6 +56,7 @@ export function OrganizationDetailPage() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const [tab, setTab] = useState<'schools' | 'admins'>('schools');
   const [createOpen, setCreateOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<School | null>(null);
@@ -157,109 +165,118 @@ export function OrganizationDetailPage() {
         </div>
       </div>
 
-      {/* Schools tab */}
-      <div className="mb-3 border-b border-slate-200">
-        <div className="inline-flex items-center gap-1.5 border-b-2 border-brand-500 px-1 pb-2 text-sm font-medium text-brand-700">
-          <SchoolIcon className="h-4 w-4" /> Schools
-        </div>
-      </div>
-
-      <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-slate-500">
-          Schools owned by this organization. Each has its own login code and
-          isolated data.
-        </p>
-        <div className="flex items-center gap-2">
-          <span title={full ? limitMsg : undefined}>
-            <button
-              className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={() => setAddOpen(true)}
-              disabled={full || org.status !== 'active'}
-            >
-              <Link2 className="mr-1.5 h-4 w-4" /> Add existing school
-            </button>
-          </span>
-          <span title={full ? limitMsg : undefined}>
-            <button
-              className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
-              onClick={() => setCreateOpen(true)}
-              disabled={full || org.status !== 'active'}
-            >
-              <Plus className="mr-1.5 h-4 w-4" /> Create school
-            </button>
-          </span>
-        </div>
-      </div>
-
-      {full && (
-        <div className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
-          {limitMsg}
-        </div>
-      )}
-      {org.status !== 'active' && (
-        <div className="mb-4 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">
-          This organization is inactive — reactivate it to add schools.
-        </div>
-      )}
-
-      <DataTable<School>
-        rows={schools}
-        getRowId={(r) => r.id}
-        isLoading={schoolsLoading}
-        emptyMessage="No schools in this organization yet."
-        columns={[
-          {
-            key: 'name',
-            header: 'School',
-            render: (s) => (
-              <div className="leading-tight">
-                <div className="font-medium text-slate-900">{s.name}</div>
-                <code className="text-xs text-slate-500">{s.slug}</code>
-              </div>
-            ),
-          },
-          {
-            key: 'code',
-            header: 'Login Code',
-            render: (s) => (
-              <code className="rounded bg-slate-50 px-2 py-0.5 font-mono text-sm font-semibold">
-                {s.code}
-              </code>
-            ),
-          },
-          { key: 'email', header: 'Email' },
-          {
-            key: 'status',
-            header: 'Status',
-            render: (s) => (
-              <Badge tone={statusTone[s.status] ?? 'slate'}>{s.status}</Badge>
-            ),
-          },
-          {
-            key: 'created',
-            header: 'Created',
-            render: (s) => formatDate(s.createdAt),
-          },
+      <Tabs
+        items={[
+          { key: 'schools', label: 'Schools', icon: SchoolIcon },
+          { key: 'admins', label: 'Organization Admins', icon: UserCog },
         ]}
-        actions={(s) => (
-          <>
-            <button
-              className="rounded-md p-1.5 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
-              onClick={() => setConfirmDetach(s)}
-              title="Remove from organization"
-            >
-              <Unlink className="h-4 w-4" />
-            </button>
-            <button
-              className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
-              onClick={() => setConfirmDelete(s)}
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </>
-        )}
+        active={tab}
+        onChange={setTab}
+        className="mb-3"
       />
+
+      {tab === 'schools' && (
+        <>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-sm text-slate-500">
+              Schools owned by this organization. Each has its own login code and
+              isolated data.
+            </p>
+            <div className="flex items-center gap-2">
+              <span title={full ? limitMsg : undefined}>
+                <button
+                  className="btn-secondary disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => setAddOpen(true)}
+                  disabled={full || org.status !== 'active'}
+                >
+                  <Link2 className="mr-1.5 h-4 w-4" /> Add existing school
+                </button>
+              </span>
+              <span title={full ? limitMsg : undefined}>
+                <button
+                  className="btn-primary disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => setCreateOpen(true)}
+                  disabled={full || org.status !== 'active'}
+                >
+                  <Plus className="mr-1.5 h-4 w-4" /> Create school
+                </button>
+              </span>
+            </div>
+          </div>
+
+          {full && (
+            <div className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-700">
+              {limitMsg}
+            </div>
+          )}
+          {org.status !== 'active' && (
+            <div className="mb-4 rounded-md bg-slate-100 px-3 py-2 text-sm text-slate-600">
+              This organization is inactive — reactivate it to add schools.
+            </div>
+          )}
+
+          <DataTable<School>
+            rows={schools}
+            getRowId={(r) => r.id}
+            isLoading={schoolsLoading}
+            emptyMessage="No schools in this organization yet."
+            columns={[
+              {
+                key: 'name',
+                header: 'School',
+                render: (s) => (
+                  <div className="leading-tight">
+                    <div className="font-medium text-slate-900">{s.name}</div>
+                    <code className="text-xs text-slate-500">{s.slug}</code>
+                  </div>
+                ),
+              },
+              {
+                key: 'code',
+                header: 'Login Code',
+                render: (s) => (
+                  <code className="rounded bg-slate-50 px-2 py-0.5 font-mono text-sm font-semibold">
+                    {s.code}
+                  </code>
+                ),
+              },
+              { key: 'email', header: 'Email' },
+              {
+                key: 'status',
+                header: 'Status',
+                render: (s) => (
+                  <Badge tone={statusTone[s.status] ?? 'slate'}>{s.status}</Badge>
+                ),
+              },
+              {
+                key: 'created',
+                header: 'Created',
+                render: (s) => formatDate(s.createdAt),
+              },
+            ]}
+            actions={(s) => (
+              <>
+                <button
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
+                  onClick={() => setConfirmDetach(s)}
+                  title="Remove from organization"
+                >
+                  <Unlink className="h-4 w-4" />
+                </button>
+                <button
+                  className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                  onClick={() => setConfirmDelete(s)}
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          />
+        </>
+      )}
+
+      {tab === 'admins' && <OrgAdminsTab organizationId={id} />}
 
       <CreateSchoolModal
         open={createOpen}
@@ -591,6 +608,219 @@ function CreateSchoolModal({
 
         {errorMsg && (
           <div className="sm:col-span-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+            {errorMsg}
+          </div>
+        )}
+      </form>
+    </Modal>
+  );
+}
+
+// ── Organization Admins ────────────────────────────────────────────────────
+function OrgAdminsTab({ organizationId }: { organizationId: string }) {
+  const qc = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<OrgAdmin | null>(null);
+  const [resettingFor, setResettingFor] = useState<OrgAdmin | null>(null);
+
+  const { data: admins = [], isLoading } = useQuery({
+    queryKey: ['org-admins', organizationId],
+    queryFn: () => OrgAdminsApi.list(organizationId),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['org-admins', organizationId] });
+
+  const create = useMutation({
+    mutationFn: (data: CreateOrgAdminPayload) => OrgAdminsApi.create(organizationId, data),
+    onSuccess: () => {
+      invalidate();
+      setCreateOpen(false);
+      toast.success('Organization admin created');
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: (adminId: string) => OrgAdminsApi.remove(adminId),
+    onSuccess: () => {
+      invalidate();
+      setConfirmDelete(null);
+      toast.success('Organization admin deleted');
+    },
+  });
+
+  const resetPassword = useMutation({
+    mutationFn: (adminId: string) => OrgAdminsApi.resetPassword(adminId),
+    onSuccess: (r) => {
+      setResettingFor(null);
+      if (r.temporaryPassword) {
+        toast.success(`Temporary password: ${r.temporaryPassword}`);
+      } else {
+        toast.success('Password reset');
+      }
+    },
+    onError: (e) => toast.error(errMsg(e)),
+  });
+
+  return (
+    <>
+      <div className="mb-4 flex items-center justify-between">
+        <p className="text-sm text-slate-500">
+          Admin logins for this organization. Any of them can sign in at the
+          organization portal and manage all of this org's schools.
+        </p>
+        <button className="btn-primary" onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1.5 h-4 w-4" /> Create admin
+        </button>
+      </div>
+
+      <DataTable<OrgAdmin>
+        rows={admins}
+        getRowId={(r) => r.id}
+        isLoading={isLoading}
+        emptyMessage="No organization admins yet."
+        columns={[
+          {
+            key: 'name',
+            header: 'Admin',
+            render: (a) => (
+              <div className="leading-tight">
+                <div className="font-medium text-slate-900">{a.name}</div>
+                <div className="text-xs text-slate-500">{a.email}</div>
+              </div>
+            ),
+          },
+          {
+            key: 'status',
+            header: 'Status',
+            render: (a) => (
+              <Badge tone={a.status === 'active' ? 'green' : 'slate'}>{a.status}</Badge>
+            ),
+          },
+          { key: 'created', header: 'Created', render: (a) => formatDate(a.createdAt) },
+        ]}
+        actions={(a) => (
+          <>
+            <button
+              className="rounded-md p-1.5 text-slate-500 hover:bg-amber-50 hover:text-amber-600"
+              onClick={() => setResettingFor(a)}
+              title="Reset password"
+            >
+              <KeyRound className="h-4 w-4" />
+            </button>
+            <button
+              className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
+              onClick={() => setConfirmDelete(a)}
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </>
+        )}
+      />
+
+      <CreateOrgAdminModal
+        open={createOpen}
+        saving={create.isPending}
+        errorMsg={errMsg(create.error)}
+        onClose={() => {
+          setCreateOpen(false);
+          create.reset();
+        }}
+        onSubmit={(payload) => create.mutate(payload)}
+      />
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        onConfirm={() => confirmDelete && remove.mutate(confirmDelete.id)}
+        loading={remove.isPending}
+        title="Delete organization admin?"
+        message={`"${confirmDelete?.name}" (${confirmDelete?.email}) will no longer be able to sign in to the organization portal.`}
+        confirmText="Delete admin"
+      />
+
+      <ConfirmDialog
+        open={!!resettingFor}
+        onClose={() => setResettingFor(null)}
+        onConfirm={() => resettingFor && resetPassword.mutate(resettingFor.id)}
+        loading={resetPassword.isPending}
+        destructive={false}
+        title="Reset password?"
+        message={`A new temporary password will be generated for "${resettingFor?.name}" (${resettingFor?.email}). Share it with them securely.`}
+        confirmText="Reset password"
+      />
+    </>
+  );
+}
+
+const orgAdminSchema = z.object({
+  name: z.string().min(1, 'Required'),
+  email: z.string().email('Invalid email'),
+  password: z.string().min(8, 'At least 8 characters'),
+});
+type OrgAdminFormValues = z.infer<typeof orgAdminSchema>;
+
+function CreateOrgAdminModal({
+  open,
+  onClose,
+  onSubmit,
+  saving,
+  errorMsg,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (payload: CreateOrgAdminPayload) => void;
+  saving: boolean;
+  errorMsg?: string;
+}) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<OrgAdminFormValues>({
+    resolver: zodResolver(orgAdminSchema),
+    values: { name: '', email: '', password: '' },
+  });
+
+  return (
+    <Modal
+      open={open}
+      onClose={() => {
+        reset();
+        onClose();
+      }}
+      title="Create organization admin"
+      description="This login can sign in at the organization portal and manage every school in this org."
+      footer={
+        <>
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="btn-primary"
+            onClick={handleSubmit(onSubmit)}
+            disabled={saving}
+          >
+            {saving ? 'Creating…' : 'Create admin'}
+          </button>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit(onSubmit)} className="grid grid-cols-1 gap-4">
+        <Field label="Name" required error={errors.name?.message}>
+          <Input {...register('name')} placeholder="Ramesh Kumar" />
+        </Field>
+        <Field label="Email" required error={errors.email?.message}>
+          <Input type="email" {...register('email')} placeholder="ramesh@trust.org" />
+        </Field>
+        <Field label="Password" hint="At least 8 characters" required error={errors.password?.message}>
+          <Input type="password" {...register('password')} placeholder="Min 8 chars" />
+        </Field>
+
+        {errorMsg && (
+          <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
             {errorMsg}
           </div>
         )}

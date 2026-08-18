@@ -275,6 +275,46 @@ export const OrganizationsApi = {
     unwrap(await api.delete(`/superadmin/organizations/${id}/schools/${schoolId}`)),
 };
 
+// ───── Organization admins ──────────────────────────────────────────────────
+export interface OrgAdmin {
+  id: string;
+  name: string;
+  email: string;
+  organizationId: string;
+  status: 'active' | 'inactive';
+  createdAt: string;
+}
+
+export interface CreateOrgAdminPayload {
+  name: string;
+  email: string;
+  password: string;
+}
+
+export interface ResetPasswordResult {
+  reset: true;
+  /** Present only when no explicit password was supplied. */
+  temporaryPassword?: string;
+}
+
+export const OrgAdminsApi = {
+  list: async (organizationId: string): Promise<OrgAdmin[]> =>
+    unwrap(await api.get(`/superadmin/organizations/${organizationId}/admins`)),
+  create: async (
+    organizationId: string,
+    data: CreateOrgAdminPayload,
+  ): Promise<OrgAdmin> =>
+    unwrap(await api.post(`/superadmin/organizations/${organizationId}/admins`, data)),
+  remove: async (id: string) =>
+    unwrap(await api.delete(`/superadmin/organization-admins/${id}`)),
+  resetPassword: async (id: string, password?: string): Promise<ResetPasswordResult> =>
+    unwrap(
+      await api.post(`/superadmin/organization-admins/${id}/reset-password`, {
+        password,
+      }),
+    ),
+};
+
 // ───── Platform maintenance ─────────────────────────────────────────────────
 export const MaintenanceApi = {
   runExpiry: async (): Promise<{

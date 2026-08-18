@@ -524,10 +524,13 @@ export class ExamBoardService {
 
   async createBatch(organizationId: string, dto: CreateExamBoardBatchDto) {
     await this.assertSchoolInOrg(organizationId, dto.schoolId);
-    await this.getOrgCourse(organizationId, dto.examBoardCourseId);
+    const course = await this.getOrgCourse(organizationId, dto.examBoardCourseId);
     await this.getOrgYear(organizationId, dto.examBoardAcademicYearId);
     if (dto.examBoardSchemeId) {
       await this.getOrgScheme(organizationId, dto.examBoardSchemeId);
+    }
+    if (dto.currentTermNumber) {
+      this.assertValidTerm(course, dto.currentTermNumber);
     }
     const batch = this.batchRepo.create({ ...dto, organizationId });
     return this.batchRepo.save(batch);
@@ -541,6 +544,10 @@ export class ExamBoardService {
     const batch = await this.getOrgBatch(organizationId, id);
     if (dto.examBoardSchemeId) {
       await this.getOrgScheme(organizationId, dto.examBoardSchemeId);
+    }
+    if (dto.currentTermNumber) {
+      const course = await this.getOrgCourse(organizationId, batch.examBoardCourseId);
+      this.assertValidTerm(course, dto.currentTermNumber);
     }
     Object.assign(batch, dto);
     return this.batchRepo.save(batch);
@@ -589,6 +596,68 @@ export class ExamBoardService {
     });
   }
 
+  /** Every exam across every batch in the org, with optional filters. */
+  async listOrgExams(
+    organizationId: string,
+    filters: {
+      examBoardBatchId?: string;
+      termNumber?: number;
+      examType?: string;
+      examCategory?: string;
+      status?: string;
+      dateFrom?: string;
+      dateTo?: string;
+    },
+  ) {
+    const batchWhere: Record<string, unknown> = { organizationId };
+    if (filters.examBoardBatchId) batchWhere.id = filters.examBoardBatchId;
+    const batches = await this.batchRepo.find({ where: batchWhere });
+    if (batches.length === 0) return [];
+
+    const batchById = new Map(batches.map((b) => [b.id, b]));
+    const schoolIds = [...new Set(batches.map((b) => b.schoolId))];
+    const schools = await this.schoolRepo.find({ where: { id: In(schoolIds) } });
+
+    const results: (TenantExamBoardExam & {
+      batchName: string;
+      examBoardCourseId: string;
+      schoolId: string;
+    })[] = [];
+
+    for (const school of schools) {
+      const batchIds = batches.filter((b) => b.schoolId === school.id).map((b) => b.id);
+      if (batchIds.length === 0) continue;
+
+      const rows = await this.tenantSchema.runInSchema(school.schemaName, async (em) => {
+        const qb = em
+          .getRepository(TenantExamBoardExam)
+          .createQueryBuilder('e')
+          .where('e.exam_board_batch_id IN (:...batchIds)', { batchIds });
+        if (filters.termNumber) qb.andWhere('e.term_number = :termNumber', { termNumber: filters.termNumber });
+        if (filters.examType) qb.andWhere('e.exam_type = :examType', { examType: filters.examType });
+        if (filters.examCategory) qb.andWhere('e.exam_category = :examCategory', { examCategory: filters.examCategory });
+        if (filters.status) qb.andWhere('e.status = :status', { status: filters.status });
+        if (filters.dateFrom) qb.andWhere('e.start_date >= :dateFrom', { dateFrom: filters.dateFrom });
+        if (filters.dateTo) qb.andWhere('e.start_date <= :dateTo', { dateTo: filters.dateTo });
+        qb.orderBy('e.start_date', 'DESC');
+        return qb.getMany();
+      });
+
+      for (const row of rows) {
+        const batch = batchById.get(row.examBoardBatchId);
+        results.push({
+          ...row,
+          batchName: batch?.name ?? '',
+          examBoardCourseId: batch?.examBoardCourseId ?? '',
+          schoolId: school.id,
+        });
+      }
+    }
+
+    results.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+    return results;
+  }
+
   /** Exams scheduled by the college for a batch, read from that school's schema. */
   async listBatchExams(organizationId: string, batchId: string) {
     const batch = await this.getOrgBatch(organizationId, batchId);
@@ -626,6 +695,12 @@ export class ExamBoardService {
     const batch = await this.getOrgBatch(organizationId, batchId);
     const course = await this.getOrgCourse(organizationId, batch.examBoardCourseId);
     this.assertValidTerm(course, dto.termNumber);
+    const category = dto.examCategory ?? 'regular';
+    if (category === 'regular' && dto.termNumber !== (batch.currentTermNumber ?? 1)) {
+      throw new BadRequestException(
+        `Regular exams can only be scheduled for the batch's current term (Term ${batch.currentTermNumber ?? 1}). Use category "supplementary" to schedule for another term.`,
+      );
+    }
     const school = await this.schoolRepo.findOne({ where: { id: batch.schoolId } });
     if (!school) throw new NotFoundException('Institution not found');
 
@@ -638,9 +713,10 @@ export class ExamBoardService {
           termNumber: dto.termNumber,
           name: dto.name,
           examType: dto.examType,
+          examCategory: dto.examCategory ?? 'regular',
           startDate: dto.startDate as unknown as Date,
           endDate: dto.endDate as unknown as Date,
-          status: 'draft',
+          status: dto.status ?? 'scheduled',
         }),
       );
     });

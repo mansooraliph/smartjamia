@@ -15,6 +15,7 @@ import {
   CreateGrantDto,
   CreateOrganizationAdminDto,
   CreateUserAccountDto,
+  ResetPasswordDto,
 } from './dto/identity.dto';
 
 @ApiTags('superadmin/identity')
@@ -85,5 +86,14 @@ export class IdentityController {
   @ApiOperation({ summary: 'Delete an organization admin login' })
   removeOrgAdmin(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.identity.removeOrgAdmin(id);
+  }
+
+  @Post('organization-admins/:id/reset-password')
+  @ApiOperation({ summary: "Reset an organization admin's password" })
+  resetOrgAdminPassword(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() dto: ResetPasswordDto,
+  ) {
+    return this.identity.resetOrgAdminPassword(id, dto);
   }
 }

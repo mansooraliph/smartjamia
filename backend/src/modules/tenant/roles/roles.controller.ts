@@ -19,7 +19,11 @@ import { TenantContext } from '../../../common/tenant/tenant-context';
 import { PermissionsService } from '../../../common/rbac/permissions.service';
 import { isSystemRole } from '../../../common/rbac/permissions';
 import { RolesService } from './roles.service';
-import { CreateRoleDto, UpdateRoleDto } from './dto/role.dto';
+import {
+  CreateRoleDto,
+  UpdateRoleDto,
+  UpdateSystemRolePermissionsDto,
+} from './dto/role.dto';
 
 @ApiTags('school/roles')
 @ApiBearerAuth('bearer')
@@ -63,6 +67,24 @@ export class RolesController {
   @ApiOperation({ summary: 'Create a custom role' })
   create(@Tenant() t: TenantContext, @Body() dto: CreateRoleDto) {
     return this.svc.create(t.schemaName, t.schoolId, dto);
+  }
+
+  @Patch('roles/system/:key')
+  @RequirePermissions('/roles:create')
+  @ApiOperation({ summary: "Override a built-in role's permissions for this school" })
+  updateSystem(
+    @Tenant() t: TenantContext,
+    @Param('key') key: string,
+    @Body() dto: UpdateSystemRolePermissionsDto,
+  ) {
+    return this.svc.updateSystemRole(t.schemaName, t.schoolId, key, dto.permissions);
+  }
+
+  @Delete('roles/system/:key')
+  @RequirePermissions('/roles:create')
+  @ApiOperation({ summary: "Reset a built-in role to its default permissions" })
+  resetSystem(@Tenant() t: TenantContext, @Param('key') key: string) {
+    return this.svc.resetSystemRole(t.schemaName, t.schoolId, key);
   }
 
   @Patch('roles/:id')

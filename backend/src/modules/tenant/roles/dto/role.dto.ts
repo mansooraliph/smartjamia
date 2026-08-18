@@ -24,6 +24,13 @@ export class CreateRoleDto {
   permissions: string[];
 }
 
+export class UpdateSystemRolePermissionsDto {
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsString({ each: true })
+  permissions: string[];
+}
+
 export class UpdateRoleDto {
   @IsOptional()
   @IsString()
