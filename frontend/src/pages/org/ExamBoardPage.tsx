@@ -274,6 +274,12 @@ function InstitutionsTab() {
   );
 }
 
+type ManageInstitutionTab = 'years' | 'courses';
+const MANAGE_INSTITUTION_TABS: TabItem<ManageInstitutionTab>[] = [
+  { key: 'years', label: 'Academic Years' },
+  { key: 'courses', label: 'Courses' },
+];
+
 function ManageInstitutionModal({
   institution,
   onClose,
@@ -283,6 +289,7 @@ function ManageInstitutionModal({
 }) {
   const qc = useQueryClient();
   const schoolId = institution.school.id;
+  const [tab, setTab] = useState<ManageInstitutionTab>('years');
 
   const { data: courses = [] } = useQuery({
     queryKey: ['eb-institution-courses', schoolId],
@@ -322,9 +329,10 @@ function ManageInstitutionModal({
         </button>
       }
     >
-      <div className="space-y-6">
+      <Tabs items={MANAGE_INSTITUTION_TABS} active={tab} onChange={setTab} className="mb-4" />
+
+      {tab === 'years' && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-slate-900">Academic Years</h4>
           {years.length === 0 ? (
             <p className="text-sm text-slate-400">
               No academic years defined yet. Add one in the Academic Years tab first.
@@ -358,9 +366,10 @@ function ManageInstitutionModal({
             </div>
           )}
         </div>
+      )}
 
+      {tab === 'courses' && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-slate-900">Courses</h4>
           {courses.length === 0 ? (
             <p className="text-sm text-slate-400">
               No courses defined yet. Add one in the Courses tab first.
@@ -394,7 +403,7 @@ function ManageInstitutionModal({
             </div>
           )}
         </div>
-      </div>
+      )}
     </Modal>
   );
 }
