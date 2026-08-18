@@ -30,8 +30,8 @@ export const useToastStore = create<ToastStore>((set) => ({
 export const toast = {
   success: (message: string, duration?: number) =>
     useToastStore.getState().addToast({ type: 'success', message, duration }),
-  error: (message: string, duration?: number) =>
-    useToastStore.getState().addToast({ type: 'error', message, duration }),
+  error: (message: string | undefined, duration?: number) =>
+    useToastStore.getState().addToast({ type: 'error', message: message ?? 'Something went wrong', duration }),
   warning: (message: string, duration?: number) =>
     useToastStore.getState().addToast({ type: 'warning', message, duration }),
   info: (message: string, duration?: number) =>
