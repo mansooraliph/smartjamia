@@ -15,6 +15,7 @@ import { Organization } from '../../database/master/organization.entity';
 import { OrganizationAdmin } from '../../database/master/organization-admin.entity';
 import { UserAccount } from '../../database/master/user-account.entity';
 import { SchoolAccessGrant } from '../../database/master/school-access-grant.entity';
+import { UserLoginActivity } from '../../database/master/user-login-activity.entity';
 import { User, UserRole } from '../../database/tenant/user.entity';
 import { Student } from '../../database/tenant/student.entity';
 import { Parent } from '../../database/tenant/parent.entity';
@@ -43,6 +44,7 @@ export class AuthService {
   private readonly orgAdminRepo: Repository<OrganizationAdmin>;
   private readonly accountRepo: Repository<UserAccount>;
   private readonly grantRepo: Repository<SchoolAccessGrant>;
+  private readonly loginActivityRepo: Repository<UserLoginActivity>;
 
   constructor(
     @InjectDataSource('master') private readonly master: DataSource,
@@ -58,6 +60,7 @@ export class AuthService {
     this.orgAdminRepo = master.getRepository(OrganizationAdmin);
     this.accountRepo = master.getRepository(UserAccount);
     this.grantRepo = master.getRepository(SchoolAccessGrant);
+    this.loginActivityRepo = master.getRepository(UserLoginActivity);
   }
 
   // ─── Superadmin (platform) ────────────────────────────────────────────────
@@ -239,7 +242,12 @@ export class AuthService {
    * returns the list of schools the account may enter — the caller then picks
    * one via `accountSelectSchool`, which yields a normal tenant session.
    */
-  async accountLogin(email: string, password: string) {
+  async accountLogin(
+    email: string,
+    password: string,
+    ip?: string,
+    userAgent?: string,
+  ) {
     const account = await this.accountRepo
       .createQueryBuilder('a')
       .addSelect('a.passwordHash')
@@ -258,6 +266,14 @@ export class AuthService {
       throw new UnauthorizedException('Invalid email or password');
     }
     await this.accountRepo.update({ id: account.id }, { lastLoginAt: new Date() });
+    await this.loginActivityRepo.save(
+      this.loginActivityRepo.create({
+        userAccountId: account.id,
+        event: 'login',
+        ipAddress: ip ?? null,
+        userAgent: userAgent ?? null,
+      }),
+    );
 
     const payload = {
       sub: account.id,
@@ -278,7 +294,12 @@ export class AuthService {
   }
 
   /** Enter a school this account was granted → a standard tenant session. */
-  async accountSelectSchool(accountId: string, schoolId: string) {
+  async accountSelectSchool(
+    accountId: string,
+    schoolId: string,
+    ip?: string,
+    userAgent?: string,
+  ) {
     const account = await this.accountRepo.findOne({ where: { id: accountId } });
     if (!account || account.status !== 'active') {
       throw new ForbiddenException('Account is disabled');
@@ -292,6 +313,15 @@ export class AuthService {
 
     const school = await this.schoolRepo.findOne({ where: { id: schoolId } });
     if (!school) throw new NotFoundException('School not found');
+    await this.loginActivityRepo.save(
+      this.loginActivityRepo.create({
+        userAccountId: accountId,
+        schoolId,
+        event: 'select_school',
+        ipAddress: ip ?? null,
+        userAgent: userAgent ?? null,
+      }),
+    );
     const tenant = this.toTenant(school);
     this.assertSchoolUsable(tenant);
 

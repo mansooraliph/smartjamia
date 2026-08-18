@@ -35,6 +35,21 @@ export class Subject {
   @Column({ type: 'integer', name: 'pass_marks', default: 35 })
   passMarks: number;
 
+  /** Continuous Evaluation (internal assessment) component — separate from the exam marks above. */
+  @Column({ type: 'integer', name: 'ce_max_marks', nullable: true })
+  ceMaxMarks: number | null;
+
+  @Column({ type: 'integer', name: 'ce_pass_marks', nullable: true })
+  cePassMarks: number | null;
+
+  /**
+   * Set when this row is mirrored from the org's Examination Board master
+   * (see ExamBoardService.syncInstitutionMirror) instead of being created
+   * manually. Blocks manual edit/delete in the tenant UI while set.
+   */
+  @Column({ type: 'uuid', name: 'exam_board_subject_id', nullable: true })
+  examBoardSubjectId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

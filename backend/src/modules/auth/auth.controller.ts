@@ -70,8 +70,13 @@ export class AuthController {
   @ApiOperation({
     summary: 'Central account login — returns the schools this login can enter',
   })
-  accountLogin(@Body() dto: AccountLoginDto) {
-    return this.auth.accountLogin(dto.email, dto.password);
+  accountLogin(@Req() req: Request, @Body() dto: AccountLoginDto) {
+    return this.auth.accountLogin(
+      dto.email,
+      dto.password,
+      req.ip,
+      req.headers['user-agent'] as string | undefined,
+    );
   }
 
   @Post('account/select-school')
@@ -83,7 +88,12 @@ export class AuthController {
   })
   accountSelectSchool(@Req() req: Request, @Body() dto: SelectSchoolDto) {
     const { sub } = (req as any).user;
-    return this.auth.accountSelectSchool(sub, dto.schoolId);
+    return this.auth.accountSelectSchool(
+      sub,
+      dto.schoolId,
+      req.ip,
+      req.headers['user-agent'] as string | undefined,
+    );
   }
 
   // ─── Organization admin ───────────────────────────────────────────────────

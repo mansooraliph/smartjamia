@@ -31,6 +31,18 @@ export class AcademicYear {
   @Column({ type: 'boolean', name: 'is_locked', default: false })
   isLocked: boolean;
 
+  /**
+   * Set when this row is mirrored from the org's Examination Board master
+   * (see ExamBoardService.syncInstitutionMirror) instead of being created
+   * manually. Blocks manual edit/delete in the tenant UI while set.
+   */
+  @Column({
+    type: 'uuid',
+    name: 'exam_board_academic_year_id',
+    nullable: true,
+  })
+  examBoardAcademicYearId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

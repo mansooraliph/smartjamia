@@ -10,6 +10,7 @@ import { School } from './master/school.entity';
 import { Organization } from './master/organization.entity';
 import { OrganizationAdmin } from './master/organization-admin.entity';
 import { UserAccount } from './master/user-account.entity';
+import { UserLoginActivity } from './master/user-login-activity.entity';
 import { SchoolAccessGrant } from './master/school-access-grant.entity';
 import { Plan } from './master/plan.entity';
 import { Subscription } from './master/subscription.entity';
@@ -20,6 +21,17 @@ import { Branch } from './master/branch.entity';
 import { BiometricDevice } from './master/biometric-device.entity';
 import { BiometricDeviceCommand } from './master/biometric-device-command.entity';
 import { BiometricDeviceLog } from './master/biometric-device-log.entity';
+import { ExamBoardInstitution } from './master/exam-board/exam-board-institution.entity';
+import { ExamBoardCourse } from './master/exam-board/exam-board-course.entity';
+import { ExamBoardAcademicYear } from './master/exam-board/exam-board-academic-year.entity';
+import { ExamBoardInstitutionCourse } from './master/exam-board/exam-board-institution-course.entity';
+import { ExamBoardInstitutionAcademicYear } from './master/exam-board/exam-board-institution-academic-year.entity';
+import { ExamBoardBatch } from './master/exam-board/exam-board-batch.entity';
+import { ExamBoardScheme } from './master/exam-board/exam-board-scheme.entity';
+import { ExamBoardSubject } from './master/exam-board/exam-board-subject.entity';
+import { ExamBoardBatchTermSubject } from './master/exam-board/exam-board-batch-term-subject.entity';
+import { ExamBoardSchemeTermSubject } from './master/exam-board/exam-board-scheme-term-subject.entity';
+import { ExamBoardSchemeSyllabus } from './master/exam-board/exam-board-scheme-syllabus.entity';
 
 export const masterDataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -34,6 +46,7 @@ export const masterDataSourceOptions: DataSourceOptions = {
     Organization,
     OrganizationAdmin,
     UserAccount,
+    UserLoginActivity,
     SchoolAccessGrant,
     Plan,
     Subscription,
@@ -44,6 +57,17 @@ export const masterDataSourceOptions: DataSourceOptions = {
     BiometricDevice,
     BiometricDeviceCommand,
     BiometricDeviceLog,
+    ExamBoardInstitution,
+    ExamBoardCourse,
+    ExamBoardAcademicYear,
+    ExamBoardInstitutionCourse,
+    ExamBoardInstitutionAcademicYear,
+    ExamBoardBatch,
+    ExamBoardScheme,
+    ExamBoardSubject,
+    ExamBoardBatchTermSubject,
+    ExamBoardSchemeTermSubject,
+    ExamBoardSchemeSyllabus,
   ],
   migrations: [join(__dirname, 'migrations', 'master', '*.{ts,js}')],
   synchronize: false,

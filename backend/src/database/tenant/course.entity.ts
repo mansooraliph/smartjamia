@@ -64,6 +64,14 @@ export class Course {
   @Column({ type: 'integer', name: 'order_index', default: 0 })
   orderIndex: number;
 
+  /**
+   * Set when this row is mirrored from the org's Examination Board master
+   * (see ExamBoardService.syncInstitutionMirror) instead of being created
+   * manually. Blocks manual edit/delete in the tenant UI while set.
+   */
+  @Column({ type: 'uuid', name: 'exam_board_course_id', nullable: true })
+  examBoardCourseId: string | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

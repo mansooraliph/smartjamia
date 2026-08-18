@@ -22,6 +22,7 @@ import { ClassesPage } from '@/pages/setup/ClassesPage';
 import { SubjectsPage } from '@/pages/setup/SubjectsPage';
 import { AttendancePage } from '@/pages/attendance/AttendancePage';
 import { ExamsPage } from '@/pages/exams/ExamsPage';
+import { ExamBoardPage as TenantExamBoardPage } from '@/pages/exam-board/ExamBoardPage';
 import { TimetablePage } from '@/pages/timetable/TimetablePage';
 import { FeesPage } from '@/pages/fees/FeesPage';
 import { ReportsPage } from '@/pages/reports/ReportsPage';
@@ -42,6 +43,19 @@ import { SuperadminLoginPage } from '@/pages/superadmin/SuperadminLoginPage';
 import { SuperadminLayout } from '@/components/superadmin/SuperadminLayout';
 import { OrgLoginPage } from '@/pages/org/OrgLoginPage';
 import { OrgDashboardPage } from '@/pages/org/OrgDashboardPage';
+import { UsersPage as OrgUsersPage } from '@/pages/org/UsersPage';
+import { SchoolDetailPage as OrgSchoolDetailPage } from '@/pages/org/SchoolDetailPage';
+import { OrgLayout } from '@/components/org/OrgLayout';
+import {
+  InstitutionsPage as EbInstitutionsPage,
+  CoursesPage as EbCoursesPage,
+  SchemesPage as EbSchemesPage,
+  SubjectsPage as EbSubjectsPage,
+  AcademicYearsPage as EbAcademicYearsPage,
+  BatchesPage as EbBatchesPage,
+  BatchDetailPage as EbBatchDetailPage,
+  ExamsPage as EbExamsPage,
+} from '@/pages/org/ExamBoardPage';
 import { AccountLoginPage } from '@/pages/account/AccountLoginPage';
 import { OverviewPage } from '@/pages/superadmin/OverviewPage';
 import { PlansPage } from '@/pages/superadmin/PlansPage';
@@ -123,10 +137,22 @@ export function AppRoutes() {
         path="/org"
         element={
           <OrgRoute>
-            <OrgDashboardPage />
+            <OrgLayout />
           </OrgRoute>
         }
-      />
+      >
+        <Route index element={<OrgDashboardPage />} />
+        <Route path="users" element={<OrgUsersPage />} />
+        <Route path="schools/:id" element={<OrgSchoolDetailPage />} />
+        <Route path="exam-board/institutions" element={<EbInstitutionsPage />} />
+        <Route path="exam-board/courses" element={<EbCoursesPage />} />
+        <Route path="exam-board/schemes" element={<EbSchemesPage />} />
+        <Route path="exam-board/subjects" element={<EbSubjectsPage />} />
+        <Route path="exam-board/academic-years" element={<EbAcademicYearsPage />} />
+        <Route path="exam-board/batches" element={<EbBatchesPage />} />
+        <Route path="exam-board/batches/:id" element={<EbBatchDetailPage />} />
+        <Route path="exam-board/exams" element={<EbExamsPage />} />
+      </Route>
 
       {/* Impersonation handoff — unguarded, sits between superadmin and tenant sessions */}
       <Route path="/impersonate-handoff" element={<ImpersonationHandoffPage />} />
@@ -218,6 +244,7 @@ export function AppRoutes() {
         <Route path="visits" element={<VisitsPage />} />
         <Route path="attendance" element={<AttendancePage />} />
         <Route path="exams" element={<ExamsPage />} />
+        <Route path="exam-board" element={<TenantExamBoardPage />} />
         <Route path="fees" element={<FeesPage />} />
         <Route path="timetable" element={<TimetablePage />} />
         <Route path="biometric-devices" element={<BiometricDevicesPage />} />

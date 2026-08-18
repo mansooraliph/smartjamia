@@ -4,21 +4,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import {
-  Network,
-  Plus,
-  Trash2,
-  LogIn,
-  KeyRound,
-  LogOut,
-  Loader2,
-} from 'lucide-react';
+import { Plus, Trash2, LogIn, Eye } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import {
-  CreateOrgGrantPayload,
   CreateOrgSchoolPayload,
   OrgAuthApi,
-  OrgGrant,
   OrgPortalApi,
   OrgSchool,
 } from '@/services/org.api';
@@ -37,7 +27,6 @@ const SCHOOL_STATUSES = [
   'suspended',
   'cancelled',
 ] as const;
-const GRANT_ROLES = ['owner', 'admin', 'manager', 'teacher', 'staff', 'cashier'];
 
 const statusTone: Record<
   OrgSchool['status'],
@@ -53,13 +42,11 @@ const statusTone: Record<
 export function OrgDashboardPage() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const logout = useAuthStore((s) => s.logout);
   const enterSchoolSession = useAuthStore((s) => s.enterSchoolSession);
   const setOrgSchools = useAuthStore((s) => s.setOrgSchools);
   const orgToken = useAuthStore((s) => s.orgToken);
   const [createOpen, setCreateOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<OrgSchool | null>(null);
-  const [grantsFor, setGrantsFor] = useState<OrgSchool | null>(null);
 
   const { data: org } = useQuery({ queryKey: ['org-me'], queryFn: OrgPortalApi.me });
   const { data: schools = [], isLoading } = useQuery({
@@ -137,36 +124,9 @@ export function OrgDashboardPage() {
     ? `School limit reached (${org.schoolsUsed}/${org.maxSchoolsAllowed}). Contact Super Admin to increase the limit.`
     : '';
 
-  const signOut = () => {
-    logout();
-    navigate('/org/login');
-  };
-
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Top bar */}
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3">
-        <div className="flex items-center gap-2">
-          <div className="rounded-md bg-indigo-600 p-1.5 text-white">
-            <Network className="h-5 w-5" />
-          </div>
-          <div className="leading-tight">
-            <div className="font-semibold text-slate-900">
-              {org?.name ?? 'Organization'}
-            </div>
-            <div className="text-xs text-slate-500">Organization admin</div>
-          </div>
-        </div>
-        <button
-          onClick={signOut}
-          className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-red-600"
-        >
-          <LogOut className="h-4 w-4" /> Sign out
-        </button>
-      </header>
-
-      <main className="mx-auto max-w-5xl px-6 py-6">
-        {/* Usage card */}
+    <>
+      {/* Usage card */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-slate-200 bg-white p-5">
           <div>
             <div className="flex items-center gap-2">
@@ -224,10 +184,14 @@ export function OrgDashboardPage() {
               key: 'name',
               header: 'School',
               render: (s) => (
-                <div className="leading-tight">
+                <button
+                  type="button"
+                  className="leading-tight text-left hover:underline"
+                  onClick={() => navigate(`/org/schools/${s.id}`)}
+                >
                   <div className="font-medium text-slate-900">{s.name}</div>
                   <code className="text-xs text-slate-500">{s.slug}</code>
-                </div>
+                </button>
               ),
             },
             {
@@ -256,19 +220,19 @@ export function OrgDashboardPage() {
           actions={(s) => (
             <>
               <button
+                className="rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                onClick={() => navigate(`/org/schools/${s.id}`)}
+                title="View details"
+              >
+                <Eye className="h-4 w-4" />
+              </button>
+              <button
                 className="rounded-md p-1.5 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 disabled:opacity-50"
                 onClick={() => enter.mutate(s.id)}
                 disabled={enter.isPending}
                 title="Enter school (open its dashboard)"
               >
                 <LogIn className="h-4 w-4" />
-              </button>
-              <button
-                className="rounded-md p-1.5 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600"
-                onClick={() => setGrantsFor(s)}
-                title="Manage access"
-              >
-                <KeyRound className="h-4 w-4" />
               </button>
               <button
                 className="rounded-md p-1.5 text-slate-500 hover:bg-red-50 hover:text-red-600"
@@ -280,7 +244,6 @@ export function OrgDashboardPage() {
             </>
           )}
         />
-      </main>
 
       <CreateSchoolModal
         open={createOpen}
@@ -293,10 +256,6 @@ export function OrgDashboardPage() {
         onSubmit={(payload) => create.mutate(payload)}
       />
 
-      {grantsFor && (
-        <GrantsModal school={grantsFor} onClose={() => setGrantsFor(null)} />
-      )}
-
       <ConfirmDialog
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
@@ -306,7 +265,7 @@ export function OrgDashboardPage() {
         message={`Soft-delete "${confirmDelete?.name}". It frees a slot against your limit.`}
         confirmText="Delete school"
       />
-    </div>
+    </>
   );
 }
 
@@ -456,150 +415,6 @@ function CreateSchoolModal({
   );
 }
 
-// ── Access grants ────────────────────────────────────────────────────────────
-function GrantsModal({
-  school,
-  onClose,
-}: {
-  school: OrgSchool;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const { data: grants = [], isLoading } = useQuery({
-    queryKey: ['org-grants', school.id],
-    queryFn: () => OrgPortalApi.listGrants(school.id),
-  });
-
-  const { register, handleSubmit, reset, formState: { errors } } = useForm<CreateOrgGrantPayload>({
-    resolver: zodResolver(
-      z.object({
-        name: z.string().min(1, 'Required'),
-        email: z.string().email('Invalid email'),
-        password: z.string().optional().or(z.literal('')),
-        role: z.enum(['owner', 'admin', 'manager', 'teacher', 'staff', 'cashier']),
-      }),
-    ),
-    values: { name: '', email: '', password: '', role: 'teacher' },
-  });
-
-  const add = useMutation({
-    mutationFn: (p: CreateOrgGrantPayload) =>
-      OrgPortalApi.grant(school.id, { ...p, password: p.password || undefined }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['org-grants', school.id] });
-      reset();
-      toast.success('Access granted');
-    },
-    onError: (e: any) => toast.error(errMsg(e) ?? 'Could not grant access'),
-  });
-
-  const revoke = useMutation({
-    mutationFn: (id: string) => OrgPortalApi.revokeGrant(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['org-grants', school.id] });
-      toast.success('Access revoked');
-    },
-  });
-
-  const active = (grants as OrgGrant[]).filter((g) => g.status === 'active');
-
-  return (
-    <Modal
-      open
-      onClose={onClose}
-      title={`Access — ${school.name}`}
-      description="Grant people access to this school with a role. They log in via the multi-school account login."
-      size="lg"
-      footer={
-        <button type="button" className="btn-secondary" onClick={onClose}>
-          Close
-        </button>
-      }
-    >
-      <div className="space-y-5">
-        <form
-          onSubmit={handleSubmit((v) => add.mutate(v))}
-          className="grid grid-cols-1 gap-3 rounded-md border border-slate-200 p-3 sm:grid-cols-2"
-        >
-          <div className="sm:col-span-2 text-sm font-medium text-slate-700">
-            Grant access
-          </div>
-          <Field label="Name" error={errors.name?.message}>
-            <Input {...register('name')} placeholder="Anita Sharma" />
-          </Field>
-          <Field label="Email" error={errors.email?.message}>
-            <Input type="email" {...register('email')} placeholder="anita@user.test" />
-          </Field>
-          <Field label="Role" error={errors.role?.message}>
-            <Select {...register('role')}>
-              {GRANT_ROLES.map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Password" hint="Only needed for a brand-new user" error={errors.password?.message}>
-            <Input type="password" {...register('password')} placeholder="Min 8 chars (new users)" />
-          </Field>
-          <div className="sm:col-span-2 flex justify-end">
-            <button type="submit" className="btn-primary" disabled={add.isPending}>
-              {add.isPending && <Loader2 className="mr-1.5 inline h-4 w-4 animate-spin" />}
-              Grant access
-            </button>
-          </div>
-        </form>
-
-        <div>
-          <div className="mb-2 text-sm font-medium text-slate-700">
-            People with access ({active.length})
-          </div>
-          {isLoading ? (
-            <div className="py-4 text-center text-slate-400">Loading…</div>
-          ) : active.length === 0 ? (
-            <div className="rounded-md border border-dashed border-slate-200 py-6 text-center text-sm text-slate-400">
-              No one has been granted access yet.
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-slate-500">
-                <tr>
-                  <th className="py-1.5">User</th>
-                  <th className="py-1.5">Role</th>
-                  <th className="py-1.5"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {active.map((g) => (
-                  <tr key={g.id} className="border-t border-slate-100">
-                    <td className="py-2">
-                      <div className="font-medium text-slate-900">
-                        {g.userAccount?.name ?? '—'}
-                      </div>
-                      <div className="text-xs text-slate-500">
-                        {g.userAccount?.email}
-                      </div>
-                    </td>
-                    <td className="py-2">
-                      <Badge tone="blue">{g.role}</Badge>
-                    </td>
-                    <td className="py-2 text-right">
-                      <button
-                        className="text-xs text-red-600 hover:underline disabled:opacity-50"
-                        onClick={() => revoke.mutate(g.id)}
-                        disabled={revoke.isPending}
-                      >
-                        Revoke
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-    </Modal>
-  );
-}
 
 function errMsg(e: unknown): string | undefined {
   if (!e) return undefined;

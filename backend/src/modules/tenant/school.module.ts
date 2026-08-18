@@ -76,6 +76,9 @@ import { TransferCertificatesService } from './transfer-certificates/transfer-ce
 import { TransferCertificatesProcessor } from './transfer-certificates/transfer-certificates.processor';
 import { REPORTS_QUEUE } from './transfer-certificates/tc.constants';
 
+import { TenantExamBoardController } from './exam-board/exam-board.controller';
+import { TenantExamBoardService } from './exam-board/exam-board.service';
+
 import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
 
 @Module({
@@ -105,6 +108,7 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
     RolesController,
     TransferCertificatesController,
     SchoolStatsController,
+    TenantExamBoardController,
   ],
   providers: [
     AcademicYearsService,
@@ -136,7 +140,9 @@ import { TenantJwtGuard } from '../../common/guards/tenant-jwt.guard';
     TransferCertificatesService,
     TransferCertificatesProcessor,
     SchoolStatsService,
+    TenantExamBoardService,
     TenantJwtGuard,
   ],
+  exports: [RolesService],
 })
 export class SchoolModule {}

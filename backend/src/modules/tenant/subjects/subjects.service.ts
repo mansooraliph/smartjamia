@@ -1,16 +1,43 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Subject } from '../../../database/tenant/subject.entity';
 import { ClassEntity } from '../../../database/tenant/class.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
+import { ExamBoardInstitution } from '../../../database/master/exam-board/exam-board-institution.entity';
 import { CreateSubjectDto, UpdateSubjectDto } from './dto/subject.dto';
 
 @Injectable()
 export class SubjectsService {
-  constructor(private readonly tenant: TenantSchemaService) {}
+  private readonly examBoardInstitutionRepo: Repository<ExamBoardInstitution>;
+
+  constructor(
+    private readonly tenant: TenantSchemaService,
+    @InjectDataSource('master') masterDs: DataSource,
+  ) {
+    this.examBoardInstitutionRepo = masterDs.getRepository(ExamBoardInstitution);
+  }
+
+  /**
+   * For a school copied into the org's Examination Board wing, Subjects are
+   * mirrored from the org master — block manual create/edit/delete so the
+   * two sources can't drift apart.
+   */
+  private async assertNotExamBoardManaged(schoolId: string) {
+    const link = await this.examBoardInstitutionRepo.findOne({
+      where: { schoolId, isEnabled: true },
+    });
+    if (link) {
+      throw new ForbiddenException(
+        'Subjects for this institution are managed by the Examination Board. Enable/disable them from the organization portal.',
+      );
+    }
+  }
 
   list(schemaName: string, schoolId: string, classId?: string) {
     return this.tenant.runInSchema(schemaName, async (em) => {
@@ -52,7 +79,8 @@ export class SubjectsService {
     });
   }
 
-  create(schemaName: string, schoolId: string, dto: CreateSubjectDto) {
+  async create(schemaName: string, schoolId: string, dto: CreateSubjectDto) {
+    await this.assertNotExamBoardManaged(schoolId);
     return this.tenant.runInSchema(schemaName, async (em) => {
       const cls = await em
         .getRepository(ClassEntity)
@@ -82,12 +110,13 @@ export class SubjectsService {
     });
   }
 
-  update(
+  async update(
     schemaName: string,
     schoolId: string,
     id: string,
     dto: UpdateSubjectDto,
   ) {
+    await this.assertNotExamBoardManaged(schoolId);
     return this.tenant.runInSchema(schemaName, async (em) => {
       const repo = em.getRepository(Subject);
       const s = await repo.findOne({ where: { id, schoolId } });
@@ -97,7 +126,8 @@ export class SubjectsService {
     });
   }
 
-  remove(schemaName: string, schoolId: string, id: string) {
+  async remove(schemaName: string, schoolId: string, id: string) {
+    await this.assertNotExamBoardManaged(schoolId);
     return this.tenant.runInSchema(schemaName, async (em) => {
       const repo = em.getRepository(Subject);
       const s = await repo.findOne({ where: { id, schoolId } });

@@ -34,6 +34,7 @@ export const PERMISSION_MODULES: PermModule[] = [
   { key: '/report-cards', label: 'Report Cards', group: 'Operations', actions: ['list', 'create'] },
   { key: '/timetable', label: 'Timetable', group: 'Operations', actions: ['list', 'create'] },
   { key: '/fees', label: 'Fees', group: 'Operations', actions: ['list', 'create', 'delete'] },
+  { key: '/exam-board', label: 'Examination Board', group: 'Operations', actions: ['list', 'create'] },
   { key: '/visitors', label: 'Visitors', group: 'Front Office', actions: ['list', 'create', 'delete'] },
   { key: '/visits', label: 'Visits', group: 'Front Office', actions: ['list', 'create', 'delete'] },
   { key: '/settings', label: 'Settings', group: 'System', actions: ['list', 'create'] },
@@ -94,7 +95,7 @@ export const SYSTEM_ROLES: RoleDef[] = [
     description: 'Classroom staff — attendance, exams, marks, timetable.',
     permissions: [
       ...listFor(['/students', '/timetable']),
-      ...allFor(['/attendance', '/exams', '/report-cards']),
+      ...allFor(['/attendance', '/exams', '/report-cards', '/exam-board']),
     ],
   },
   {

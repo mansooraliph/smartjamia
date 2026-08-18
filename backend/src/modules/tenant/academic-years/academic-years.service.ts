@@ -1,15 +1,18 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { IsNull } from 'typeorm';
+import { InjectDataSource } from '@nestjs/typeorm';
+import { DataSource, IsNull, Repository } from 'typeorm';
 import { AcademicYear } from '../../../database/tenant/academic-year.entity';
 import { Course } from '../../../database/tenant/course.entity';
 import { ClassEntity } from '../../../database/tenant/class.entity';
 import { Section } from '../../../database/tenant/section.entity';
 import { TenantSchemaService } from '../../../common/tenant/tenant-schema.service';
+import { ExamBoardInstitution } from '../../../database/master/exam-board/exam-board-institution.entity';
 import {
   CreateAcademicYearDto,
   UpdateAcademicYearDto,
@@ -17,7 +20,30 @@ import {
 
 @Injectable()
 export class AcademicYearsService {
-  constructor(private readonly tenant: TenantSchemaService) {}
+  private readonly examBoardInstitutionRepo: Repository<ExamBoardInstitution>;
+
+  constructor(
+    private readonly tenant: TenantSchemaService,
+    @InjectDataSource('master') masterDs: DataSource,
+  ) {
+    this.examBoardInstitutionRepo = masterDs.getRepository(ExamBoardInstitution);
+  }
+
+  /**
+   * For a school copied into the org's Examination Board wing, Academic
+   * Years are mirrored from the org master — block manual create/edit/delete
+   * so the two sources can't drift apart.
+   */
+  private async assertNotExamBoardManaged(schoolId: string) {
+    const link = await this.examBoardInstitutionRepo.findOne({
+      where: { schoolId, isEnabled: true },
+    });
+    if (link) {
+      throw new ForbiddenException(
+        'Academic years for this institution are managed by the Examination Board. Enable/disable them from the organization portal.',
+      );
+    }
+  }
 
   list(schemaName: string, schoolId: string) {
     return this.tenant.runInSchema(schemaName, async (em) => {
@@ -38,7 +64,8 @@ export class AcademicYearsService {
     });
   }
 
-  create(schemaName: string, schoolId: string, dto: CreateAcademicYearDto) {
+  async create(schemaName: string, schoolId: string, dto: CreateAcademicYearDto) {
+    await this.assertNotExamBoardManaged(schoolId);
     return this.tenant.runInSchema(schemaName, async (em) => {
       const repo = em.getRepository(AcademicYear);
       const dup = await repo.findOne({ where: { schoolId, name: dto.name } });
@@ -60,12 +87,13 @@ export class AcademicYearsService {
     });
   }
 
-  update(
+  async update(
     schemaName: string,
     schoolId: string,
     id: string,
     dto: UpdateAcademicYearDto,
   ) {
+    await this.assertNotExamBoardManaged(schoolId);
     return this.tenant.runInSchema(schemaName, async (em) => {
       const repo = em.getRepository(AcademicYear);
       const ay = await repo.findOne({ where: { id, schoolId } });
@@ -89,7 +117,8 @@ export class AcademicYearsService {
     });
   }
 
-  remove(schemaName: string, schoolId: string, id: string) {
+  async remove(schemaName: string, schoolId: string, id: string) {
+    await this.assertNotExamBoardManaged(schoolId);
     return this.tenant.runInSchema(schemaName, async (em) => {
       const repo = em.getRepository(AcademicYear);
       const ay = await repo.findOne({ where: { id, schoolId } });

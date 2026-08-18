@@ -24,6 +24,7 @@ import {
   UserCheck,
   DoorOpen,
   Fingerprint,
+  Landmark,
 } from 'lucide-react';
 import { useAuthStore } from '@/stores/auth.store';
 import { useTerminology } from '@/hooks/useTerminology';
@@ -39,6 +40,7 @@ interface NavItem {
   label: string;
   icon: typeof Users;
   end?: boolean;
+  collegeOnly?: boolean;
 }
 
 interface NavGroup {
@@ -90,6 +92,7 @@ const navGroups: NavGroup[] = [
       { to: '/fees', label: 'Fees', icon: Wallet },
       { to: '/timetable', label: 'Timetable', icon: CalendarRange },
       { to: '/biometric-devices', label: 'Biometric Devices', icon: Fingerprint },
+      { to: '/exam-board', label: 'Examination Board', icon: Landmark, collegeOnly: true },
     ],
   },
   {
@@ -164,7 +167,11 @@ export function SchoolLayout() {
           {navGroups
             .map((g) => ({
               ...g,
-              items: g.items.filter((it) => canAccessPath(ctx, it.to)),
+              items: g.items.filter(
+                (it) =>
+                  canAccessPath(ctx, it.to) &&
+                  (!it.collegeOnly || term.institutionType === 'college'),
+              ),
             }))
             .filter((g) => g.items.length > 0)
             .map((g) => (

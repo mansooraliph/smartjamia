@@ -25,6 +25,7 @@ export const MODULE_KEYS = [
   '/report-cards',
   '/timetable',
   '/fees',
+  '/exam-board',
   '/visitors',
   '/visits',
   '/settings',

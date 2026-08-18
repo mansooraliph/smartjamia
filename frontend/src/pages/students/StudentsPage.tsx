@@ -50,6 +50,7 @@ import {
   BulkAssignModal,
 } from './StudentBulkModals';
 import { PortalPinModal } from '@/components/shared/PortalPinModal';
+import { ExamBoardEnrollModal } from './ExamBoardEnrollModal';
 import { useTerminology } from '@/hooks/useTerminology';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -200,6 +201,7 @@ export function StudentsPage() {
   );
   const [importOpen, setImportOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [examBoardOpen, setExamBoardOpen] = useState(false);
   const [pinModal, setPinModal] = useState<{ open: boolean; student?: Student }>(
     { open: false },
   );
@@ -291,6 +293,15 @@ export function StudentsPage() {
                 >
                   <UserPlus className="mr-1.5 h-4 w-4" /> Bulk assign
                 </button>
+                {term.institutionType === 'college' && (
+                  <button
+                    className="btn-secondary"
+                    onClick={() => setExamBoardOpen(true)}
+                    title="Enroll students into an Examination Board batch"
+                  >
+                    <UserPlus className="mr-1.5 h-4 w-4" /> Enroll to Exam Board
+                  </button>
+                )}
                 <button
                   className="btn-secondary"
                   onClick={() => setImportOpen(true)}
@@ -645,6 +656,12 @@ export function StudentsPage() {
         }))}
         onClose={() => setBulkOpen(false)}
         onAssigned={() => qc.invalidateQueries({ queryKey: ['students'] })}
+      />
+
+      <ExamBoardEnrollModal
+        open={examBoardOpen}
+        onClose={() => setExamBoardOpen(false)}
+        onEnrolled={() => qc.invalidateQueries({ queryKey: ['students'] })}
       />
 
       <ConfirmDialog

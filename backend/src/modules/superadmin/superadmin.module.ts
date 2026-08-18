@@ -27,19 +27,30 @@ import { IdentityService } from './identity/identity.service';
 
 import { OrgPortalController } from './organization-portal/org-portal.controller';
 import { OrgPortalService } from './organization-portal/org-portal.service';
+import { OrgUsersController } from './organization-portal/org-users.controller';
+
+import { ExamBoardController } from './exam-board/exam-board.controller';
+import { ExamBoardService } from './exam-board/exam-board.service';
+import { ExamBoardSubjectImportService } from './exam-board/exam-board-subject-import.service';
+
+import { OrgRolesController } from './organization-portal/org-roles.controller';
 
 import { SuperadminGuard } from '../../common/guards/superadmin.guard';
 import { OrganizationGuard } from '../../common/guards/organization.guard';
 import { AuthModule } from '../auth/auth.module';
+import { SchoolModule } from '../tenant/school.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, SchoolModule],
   controllers: [
     PlansController,
     SchoolsController,
     OrganizationsController,
     IdentityController,
     OrgPortalController,
+    OrgUsersController,
+    OrgRolesController,
+    ExamBoardController,
     SubscriptionsController,
     BranchesController,
     StatsController,
@@ -52,6 +63,8 @@ import { AuthModule } from '../auth/auth.module';
     OrganizationsService,
     IdentityService,
     OrgPortalService,
+    ExamBoardService,
+    ExamBoardSubjectImportService,
     SubscriptionsService,
     BranchesService,
     StatsService,

@@ -20,6 +20,10 @@ import { Parent } from './tenant/parent.entity';
 import { StudentQualification } from './tenant/student-qualification.entity';
 import { StudentDocument } from './tenant/student-document.entity';
 import { StudentEnrollment } from './tenant/student-enrollment.entity';
+import { ExamBoardEnrollment } from './tenant/exam-board-enrollment.entity';
+import { ExamBoardExam } from './tenant/exam-board-exam.entity';
+import { ExamBoardExamSubject } from './tenant/exam-board-exam-subject.entity';
+import { ExamBoardMark } from './tenant/exam-board-mark.entity';
 import { Attendance } from './tenant/attendance.entity';
 import { Exam } from './tenant/exam.entity';
 import { ExamSchedule } from './tenant/exam-schedule.entity';
@@ -64,6 +68,10 @@ export const TENANT_ENTITIES = [
   StudentQualification,
   StudentDocument,
   StudentEnrollment,
+  ExamBoardEnrollment,
+  ExamBoardExam,
+  ExamBoardExamSubject,
+  ExamBoardMark,
   Attendance,
   Exam,
   ExamSchedule,
