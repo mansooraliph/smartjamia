@@ -588,7 +588,14 @@ export class StudentImportService {
           'Select an academic year to enroll into the chosen class',
         );
       }
-      if (![...classMap.values()].includes(overrideClassId)) {
+      // Checked against the class table directly, not classMap: class names
+      // are only unique per (year, course), so classMap's name→id lookup can
+      // drop a class's id when another course in the same year reuses its
+      // name (e.g. "Semester 1" under two different courses).
+      const overrideClass = await em.getRepository(ClassEntity).findOne({
+        where: { id: overrideClassId, schoolId, academicYearId },
+      });
+      if (!overrideClass) {
         throw new BadRequestException(
           'Selected class not found in the chosen academic year',
         );
