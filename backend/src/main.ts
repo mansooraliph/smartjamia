@@ -45,8 +45,19 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new ResponseInterceptor());
 
+  // Any localhost/127.0.0.1 origin is allowed in dev so the Vite frontend
+  // (5175) and Expo web (port varies — 8081, 19006, ...) both work without
+  // hardcoding each dev server's port. Production is locked to FRONTEND_URL.
+  const isProd = config.get<string>('NODE_ENV') === 'production';
   app.enableCors({
-    origin: [frontendUrl, 'http://localhost:5175'],
+    origin: isProd
+      ? [frontendUrl]
+      : (origin, callback) => {
+          if (!origin || /^https?:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+            return callback(null, true);
+          }
+          callback(new Error(`Not allowed by CORS: ${origin}`), false);
+        },
     credentials: true,
     allowedHeaders: [
       'Content-Type',
