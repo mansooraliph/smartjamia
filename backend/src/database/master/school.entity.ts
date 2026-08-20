@@ -48,14 +48,13 @@ export class School {
   @Column({ type: 'varchar', length: 255 })
   name: string;
 
-  @Index({ unique: true })
-  @Column({ type: 'varchar', length: 255, unique: true })
+  @Column({ type: 'varchar', length: 255, name: 'support_email' })
   email: string;
 
-  @Column({ type: 'varchar', length: 20, nullable: true })
+  @Column({ type: 'varchar', length: 20, name: 'support_phone', nullable: true })
   phone: string | null;
 
-  @Column({ type: 'varchar', length: 500, name: 'logo_url', nullable: true })
+  @Column({ type: 'varchar', length: 500, name: 'logo', nullable: true })
   logoUrl: string | null;
 
   @Column({ type: 'uuid', name: 'plan_id', nullable: true })
